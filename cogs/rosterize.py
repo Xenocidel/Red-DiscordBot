@@ -229,7 +229,7 @@ class Rosterize:
                 r = rosterdetail(c, message.server.id, margs[1])
                 em = discord.Embed()
                 em.title = "Roster status of " + margs[1]
-                em.set_footer(text = "Created by " + r.author)
+                em.set_footer(text = "Created by " + r['author'])
                 out_elements = [": ",
                         str(len(self.rosters[margs[1]])), "\n"]
                 for user in self.rosters[margs[1]]:
