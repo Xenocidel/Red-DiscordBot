@@ -38,10 +38,10 @@ class Rosterize:
         queryelements = ["SELECT 1 FROM rosters WHERE sid = '", sid,
                 "' AND rname = '", rname, "'"]
         query = "".join(queryelements)
-        c.execute(query)
-        if c.fetchone() is 1:
-            return True
-        return False
+        for row in c.execute(query):
+            if row[0] == 1:
+                return True
+            return False
 
     def inattendees(self, c, sid, rname, uid):
         """
@@ -51,10 +51,10 @@ class Rosterize:
         queryelements = ["SELECT 1 FROM attendees WHERE sid = '", sid,
                 "' AND rname = '", rname, "' AND attendee_uid = '", uid, "'"]
         query = "".join(queryelements)
-        c.execute(query)
-        if c.fetchone() is 1:
-            return True
-        return False
+        for row in c.execute(query):
+            if row[0] == 1:
+                return True
+            return False
 
 
     def addattendee(self, conn, c, sid, rname, uid):
@@ -64,7 +64,7 @@ class Rosterize:
 
         raises: DatabaseError
         """
-        c.execute("INSERT INTO attendees VALUES (?,?,?)", (sid, rname, attendee_uid))
+        c.execute("INSERT INTO attendees VALUES (?,?,?)", (sid, rname, uid))
         conn.commit()
 
     def removeattendee(self, conn, c, sid, rname, uid=None):
@@ -83,8 +83,8 @@ class Rosterize:
         c.execute("INSERT INTO rosters VALUES (?,?,?)", (sid, rname, author_uid))
         conn.commit()
 
-    def delroster(self, conn, c, sid, rname):
-        removeattendee(c, sid, rname)  # removes all attendees from roster
+    def del_db_roster(self, conn, c, sid, rname):
+        self.removeattendee(conn, c, sid, rname)  # removes all attendees from roster
         queryelements = ["DELETE FROM rosters WHERE sid = '", sid,
                 "' AND rname = '", rname, "'"]
         query = "".join(queryelements)
@@ -112,20 +112,26 @@ class Rosterize:
                     sid, "' AND rname = '", rname, "'"]
             query = "".join(queryelements)
             qresult = c.execute(query)
-            ans['a_count'] = len(qresult)  # number of attendees
+            a_count = 0  # number of attendees
             for row in qresult:
-                attendees.append(self.get_user_info(row[0]))
-            ans['a_list'] = attendees  # list of attendees (User type)        
+                attendees.append(row[0])
+                a_count += 1
+            ans['a_count'] = a_count
+            ans['a_list'] = attendees  # list of attendees' IDs        
         else:
             # return all rosters in a specified server and the attendee counts
-            queryelements = ["SELECT rname, count(rname) FROM attendees WHERE sid = '",
-                sid, "' GROUP BY rname"]
+            # TODO fix this
+            queryelements = ["SELECT rosters.rname, count(attendees.rname) FROM rosters, attendees WHERE rosters.sid = '",
+                sid, "' AND rosters.sid = attendees.sid GROUP BY rosters.rname"]
             query = "".join(queryelements)
             qresult = c.execute(query)
-            ans['r_count'] = len(qresult)
+            r_count = 0
             for row in qresult:
+                r_count += 1
                 rosters.append(row)  # each row is a list with rname, a_count
+            ans['r_count'] = r_count
             ans['r_list'] = rosters
+        return ans
 
     @commands.command(aliases=["cr", "nr"], pass_context=True, no_pm=True)
     async def createroster(self, ctx):
@@ -139,13 +145,16 @@ class Rosterize:
         
         if len(margs) is not 2:
             await self.bot.say("No roster name specified")
+        elif len(margs[1]) > 99:
+            await self.bot.say("Roster name too long")
         elif self.intable(c, message.server.id, margs[1]):
         # if margs[1] in self.rosters:
             await self.bot.say(margs[1] + ' already exists')
         else:
             self.newroster(conn, c, message.server.id, margs[1], message.author.id)
             # self.rosters[margs[1]] = []
-            await self.bot.say('Created new roster called ' + margs[1] + '. Type ,jr ' + margs[1] + ' to join')
+            await self.bot.say('Created new roster called ' + margs[1] + 
+                    '. Type >jr ' + margs[1] + ' to join')
         
         self.dbclose(conn)
 
@@ -160,6 +169,8 @@ class Rosterize:
         message, margs, conn, c = t
         if len(margs) is not 2:
             await self.bot.say("No roster name specified. To see list of rosters, use the rosterstatus (rs) command")
+        elif len(margs[1]) > 99:
+            await self.bot.say("Roster name too long")
         elif not self.intable(c, message.server.id, margs[1]):
             await self.bot.say(margs[1] + " does not exist")
         else:
@@ -183,6 +194,8 @@ class Rosterize:
         message, margs, conn, c = t
         if len(margs) is not 2:
             await self.bot.say("No roster name specified. To see list of rosters, use the rosterstatus (rs) command")
+        elif len(margs[1]) > 99:
+            await self.bot.say("Roster name too long")
         elif not self.intable(c, message.server.id, margs[1]):
             await self.bot.say(margs[1] + " does not exist")
         else:
@@ -207,10 +220,12 @@ class Rosterize:
         
         if len(margs) is not 2:
             await self.bot.say("No roster name specified")
+        elif len(margs[1]) > 99:
+            await self.bot.say("Roster name too long")
         elif not self.intable(c, message.server.id, margs[1]):
             await self.bot.say(margs[1] + " does not exist")
         else:
-            self.delroster(conn, c, message.server.id, margs[1])
+            self.del_db_roster(conn, c, message.server.id, margs[1])
             await self.bot.say(margs[1] + " deleted")
         self.dbclose(conn)
 
@@ -229,33 +244,36 @@ class Rosterize:
             # Display all rosters and their respective attendee counts
             r = self.rosterdetail(c, message.server.id)
             em = discord.Embed()
-            title_elements = ["There are ", r['r_count'], " rosters"]
+            title_elements = ["There are ", str(r['r_count']), " rosters"]
             em.title = "".join(title_elements)
-            em.set_footer(text = "Rosterize b20171015")
+            em.set_footer(text = "Rosterize by Xenocidel b20171015")
             desc_elements = []
             for row in r['r_list']:
                 desc_elements.append("(")
                 desc_elements.append(row[0])
                 desc_elements.append(": ")
-                desc_elements.append(row[1])
+                desc_elements.append(str(row[1]))
                 desc_elements.append(") ")
             em.description = "".join(desc_elements)
             await self.bot.say(embed = em)
             
         elif len(margs) is 2:
             # Display roster author, attendee count, and attendees
-            if not self.intable(c, message.server.id, margs[1]):
+            if len(margs[1]) > 99:
+                await self.bot.say("Roster name too long")
+            elif not self.intable(c, message.server.id, margs[1]):
                 await self.bot.say(margs[1] + " does not exist")
             else:
                 r = self.rosterdetail(c, message.server.id, margs[1])
                 em = discord.Embed()
                 title_elements = ["Roster status of ", margs[1], " (",
-                        r['a_count'], "people)"]
+                        str(r['a_count']), " enrolled)"]
                 em.title = "".join(title_elements) 
-                em.set_footer(text = "Created by " + r['author'])
+                em.set_footer(text = "Roster created by " +
+                        message.server.get_member(r['author']).name)
                 desc_elements = []
                 for user in r['a_list']:
-                    desc_elements.append(user.name)
+                    desc_elements.append(message.server.get_member(user).name)
                     desc_elements.append(' ')
                 em.description = "".join(desc_elements)
                 await self.bot.say(embed = em)
