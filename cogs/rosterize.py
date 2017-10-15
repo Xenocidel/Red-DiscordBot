@@ -100,7 +100,7 @@ class Rosterize:
         """
         ans = {}
         attendees = []
-        rosters = []
+        rosters = {}
         if rname != None:
             # return specific roster's author, attendees, and count
             queryelements = ["SELECT author_uid FROM rosters WHERE sid = '", sid,
@@ -121,14 +121,20 @@ class Rosterize:
         else:
             # return all rosters in a specified server and the attendee counts
             # TODO fix this
-            queryelements = ["SELECT rosters.rname, count(attendees.rname) FROM rosters, attendees WHERE rosters.sid = '",
-                sid, "' AND rosters.sid = attendees.sid GROUP BY rosters.rname"]
+            queryelements = ["SELECT rname FROM rosters WHERE rosters.sid = '",
+                sid, "'"]
             query = "".join(queryelements)
             qresult = c.execute(query)
             r_count = 0
             for row in qresult:
+                rosters[row[0]] = 0
                 r_count += 1
-                rosters.append(row)  # each row is a list with rname, a_count
+            queryelements = ["SELECT rname, count(rname) FROM attendees WHERE attendees.sid = '",
+                    sid, "' GROUP BY rname"]
+            query = "".join(queryelements)
+            qresult = c.execute(query)
+            for row in qresult:
+                rosters[row[0]] = row[1]
             ans['r_count'] = r_count
             ans['r_list'] = rosters
         return ans
@@ -248,11 +254,11 @@ class Rosterize:
             em.title = "".join(title_elements)
             em.set_footer(text = "Rosterize by Xenocidel b20171015")
             desc_elements = []
-            for row in r['r_list']:
+            for rname, a_count in r['r_list'].items():
                 desc_elements.append("(")
-                desc_elements.append(row[0])
+                desc_elements.append(rname)
                 desc_elements.append(": ")
-                desc_elements.append(str(row[1]))
+                desc_elements.append(str(a_count))
                 desc_elements.append(") ")
             em.description = "".join(desc_elements)
             await self.bot.say(embed = em)
