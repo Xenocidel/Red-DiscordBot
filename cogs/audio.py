@@ -20,6 +20,7 @@ import inspect
 import subprocess
 import urllib.parse
 from enum import Enum
+import requests
 
 __author__ = "tekulvw"
 __version__ = "0.1.1"
@@ -871,6 +872,11 @@ class Audio:
         if self._valid_playable_url(url) or "[SEARCH:]" in url:
             clean_url = self._clean_url(url)
             try:
+                if not "[SEARCH:]" in url:
+                    if 'LIVESTREAM' in requests.get(url).text:
+                        message = "I am unable to play Youtube livestreams"
+                        await self.bot.send_message(channel, message)
+                        return
                 song = await self._guarantee_downloaded(server, url)
             except YouTubeDlError as e:
                 message = ("I'm unable to play '{}' because of an error:\n"
@@ -2347,7 +2353,6 @@ def verify_ffmpeg_avconv():
         return False
     else:
         return "avconv"
-
 
 def setup(bot):
     check_folders()
