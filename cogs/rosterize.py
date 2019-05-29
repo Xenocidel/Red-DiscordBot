@@ -56,7 +56,6 @@ class Rosterize:
                 return True
             return False
 
-
     def addattendee(self, conn, c, sid, rname, uid):
         """
         Adds a user to attendees table. If a duplicate entry is inserted,
@@ -82,6 +81,20 @@ class Rosterize:
     def newroster(self, conn, c, sid, rname, author_uid):
         c.execute("INSERT INTO rosters VALUES (?,?,?)", (sid, rname, author_uid))
         conn.commit()
+
+    def is_owner(self, c, sid, rname, author_uid):
+        """
+        Function will return false if the roster does not exist or if the
+        owner of the roster's uid does not match the value passed
+        """
+        queryelements = ["SELECT author_uid FROM rosters WHERE sid = '", sid, "' AND rname = '", rname,"'"]
+        query = "".join(queryelements)
+        c.execute(query)
+        ownerID = "".join(c.fetchone())
+
+        if author_uid == ownerID:
+            return True
+        return False    
 
     def del_db_roster(self, conn, c, sid, rname):
         self.removeattendee(conn, c, sid, rname)  # removes all attendees from roster
@@ -230,6 +243,8 @@ class Rosterize:
             await self.bot.say("Roster name too long")
         elif not self.intable(c, message.server.id, margs[1]):
             await self.bot.say(margs[1] + " does not exist")
+        elif not self.is_owner(c, message.server.id, margs[1], message.author.id):
+            await self.bot.say(margs[1] + " can only be deleted by its owner")      
         else:
             self.del_db_roster(conn, c, message.server.id, margs[1])
             await self.bot.say(margs[1] + " deleted")
