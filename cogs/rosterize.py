@@ -82,7 +82,7 @@ class Rosterize:
         c.execute("INSERT INTO rosters VALUES (?,?,?)", (sid, rname, author_uid))
         conn.commit()
 
-    def checkOwner(self, c, sid, rname, author_uid):
+    def is_owner(self, c, sid, rname, author_uid):
         """
         Function will return false if the roster does not exist or if the
         owner of the roster's uid does not match the value passed
@@ -97,7 +97,6 @@ class Rosterize:
         return False    
 
     def del_db_roster(self, conn, c, sid, rname):
-
         self.removeattendee(conn, c, sid, rname)  # removes all attendees from roster
         queryelements = ["DELETE FROM rosters WHERE sid = '", sid,
                 "' AND rname = '", rname, "'"]
@@ -244,7 +243,7 @@ class Rosterize:
             await self.bot.say("Roster name too long")
         elif not self.intable(c, message.server.id, margs[1]):
             await self.bot.say(margs[1] + " does not exist")
-        elif self.checkOwner(c, message.server.id, margs[1], message.author.id) == False:
+        elif not self.is_owner(c, message.server.id, margs[1], message.author.id):
             await self.bot.say(margs[1] + " can only be deleted by its owner")      
         else:
             self.del_db_roster(conn, c, message.server.id, margs[1])
