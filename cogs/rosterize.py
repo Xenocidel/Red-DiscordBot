@@ -235,6 +235,28 @@ class Rosterize:
             await self.bot.say(margs[1] + " deleted")
         self.dbclose(conn)
 
+
+    @commands.command(aliases=["da"], pass_context=True, no_pm=True)
+    async def delete_all_rosters(self, ctx):
+        """Deletes all rosters made by calling user
+        Usage:
+        delete_all_rosters
+        """
+        t = self.setvars(ctx)
+        message, margs, conn, c = t
+
+        query = ["SELECT rname FROM rosters WHERE sid = '", str(message.server.id),
+                 "' AND author_uid = '", str(message.author.id), "'"];
+        query = "".join(query);
+
+        for row in c.execute(query):
+            self.del_db_roster(conn, c, message.server.id, row[0]);
+
+        self.dbclose(conn);
+
+        await self.bot.say("Deleted all rosters");
+        
+        
     @commands.command(aliases=["rs", "lr"], pass_context=True, no_pm=True)
     async def rosterstatus(self, ctx):
         """Displays members of a roster, or all rosters and member counts
