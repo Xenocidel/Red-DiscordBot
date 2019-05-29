@@ -5,6 +5,7 @@ import re
 
 from .common import InfoExtractor
 from ..utils import (
+    int_or_none,
     parse_iso8601,
     unescapeHTML,
 )
@@ -56,18 +57,16 @@ class PeriscopeIE(PeriscopeBaseIE):
     def _real_extract(self, url):
         token = self._match_id(url)
 
-        broadcast_data = self._call_api(
-            'getBroadcastPublic', {'broadcast_id': token}, token)
-        broadcast = broadcast_data['broadcast']
-        status = broadcast['status']
+        stream = self._call_api(
+            'accessVideoPublic', {'broadcast_id': token}, token)
 
-        user = broadcast_data.get('user', {})
+        broadcast = stream['broadcast']
+        title = broadcast['status']
 
-        uploader = broadcast.get('user_display_name') or user.get('display_name')
-        uploader_id = (broadcast.get('username') or user.get('username') or
-                       broadcast.get('user_id') or user.get('id'))
+        uploader = broadcast.get('user_display_name') or broadcast.get('username')
+        uploader_id = (broadcast.get('user_id') or broadcast.get('username'))
 
-        title = '%s - %s' % (uploader, status) if uploader else status
+        title = '%s - %s' % (uploader, title) if uploader else title
         state = broadcast.get('state').lower()
         if state == 'running':
             title = self._live_title(title)
@@ -77,8 +76,13 @@ class PeriscopeIE(PeriscopeBaseIE):
             'url': broadcast[image],
         } for image in ('image_url', 'image_url_small') if broadcast.get(image)]
 
-        stream = self._call_api(
-            'getAccessPublic', {'broadcast_id': token}, token)
+        width = int_or_none(broadcast.get('width'))
+        height = int_or_none(broadcast.get('height'))
+
+        def add_width_and_height(f):
+            for key, val in (('width', width), ('height', height)):
+                if not f.get(key):
+                    f[key] = val
 
         video_urls = set()
         formats = []
@@ -88,16 +92,21 @@ class PeriscopeIE(PeriscopeBaseIE):
                 continue
             video_urls.add(video_url)
             if format_id != 'rtmp':
-                formats.extend(self._extract_m3u8_formats(
+                m3u8_formats = self._extract_m3u8_formats(
                     video_url, token, 'mp4',
                     entry_protocol='m3u8_native'
                     if state in ('ended', 'timed_out') else 'm3u8',
-                    m3u8_id=format_id, fatal=False))
+                    m3u8_id=format_id, fatal=False)
+                if len(m3u8_formats) == 1:
+                    add_width_and_height(m3u8_formats[0])
+                formats.extend(m3u8_formats)
                 continue
-            formats.append({
+            rtmp_format = {
                 'url': video_url,
                 'ext': 'flv' if format_id == 'rtmp' else 'mp4',
-            })
+            }
+            add_width_and_height(rtmp_format)
+            formats.append(rtmp_format)
         self._sort_formats(formats)
 
         return {

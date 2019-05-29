@@ -1,21 +1,25 @@
 """
-The :mod:`websockets.http` module provides HTTP parsing functions. They're
-merely adequate for the WebSocket handshake messages.
+The :mod:`websockets.http` module provides basic HTTP parsing and
+serialization. It is merely adequate for WebSocket handshake messages.
 
-These functions cannot be imported from :mod:`websockets`; they must be
-imported from :mod:`websockets.http`.
+Its functions cannot be imported from :mod:`websockets`. They must be imported
+from :mod:`websockets.http`.
 
 """
 
 import asyncio
-import http.client
+import collections.abc
 import re
 import sys
 
 from .version import version as websockets_version
 
 
-__all__ = ['read_request', 'read_response', 'USER_AGENT']
+__all__ = [
+    'Headers', 'MultipleValuesError',
+    'read_request', 'read_response',
+    'USER_AGENT',
+]
 
 MAX_HEADERS = 256
 MAX_LINE = 4096
@@ -30,7 +34,7 @@ USER_AGENT = ' '.join((
 
 # Regex for validating header names.
 
-_token_re = re.compile(rb'^[-!#$%&\'*+.^_`|~0-9a-zA-Z]+$')
+_token_re = re.compile(rb'[-!#$%&\'*+.^_`|~0-9a-zA-Z]+')
 
 # Regex for validating header values.
 
@@ -43,7 +47,7 @@ _token_re = re.compile(rb'^[-!#$%&\'*+.^_`|~0-9a-zA-Z]+$')
 
 # See also https://www.rfc-editor.org/errata_search.php?rfc=7230&eid=4189
 
-_value_re = re.compile(rb'^[\x09\x20-\x7e\x80-\xff]*$')
+_value_re = re.compile(rb'[\x09\x20-\x7e\x80-\xff]*')
 
 
 @asyncio.coroutine
@@ -54,7 +58,7 @@ def read_request(stream):
     ``stream`` is an :class:`~asyncio.StreamReader`.
 
     Return ``(path, headers)`` where ``path`` is a :class:`str` and
-    ``headers`` is a list of ``(name, value)`` tuples.
+    ``headers`` is a :class:`Headers` instance.
 
     ``path`` isn't URL-decoded or validated in any way.
 
@@ -99,7 +103,7 @@ def read_response(stream):
     ``stream`` is an :class:`~asyncio.StreamReader`.
 
     Return ``(status_code, headers)`` where ``status_code`` is a :class:`int`
-    and ``headers`` is a list of ``(name, value)`` tuples.
+    and ``headers`` is a :class:`Headers` instance.
 
     Non-ASCII characters are represented with surrogate escapes.
 
@@ -126,8 +130,8 @@ def read_response(stream):
     # This may raise "ValueError: invalid literal for int() with base 10"
     status_code = int(status_code)
     if not 100 <= status_code < 1000:
-        raise ValueError("Unsupported HTTP status_code code: %d" % status_code)
-    if not _value_re.match(reason):
+        raise ValueError("Unsupported HTTP status code: %d" % status_code)
+    if not _value_re.fullmatch(reason):
         raise ValueError("Invalid HTTP reason phrase: %r" % reason)
 
     headers = yield from read_headers(stream)
@@ -142,8 +146,7 @@ def read_headers(stream):
 
     ``stream`` is an :class:`~asyncio.StreamReader`.
 
-    Return ``(start_line, headers)`` where ``start_line`` is :class:`bytes`
-    and ``headers`` is a list of ``(name, value)`` tuples.
+    Return a :class:`Headers` instance
 
     Non-ASCII characters are represented with surrogate escapes.
 
@@ -152,24 +155,23 @@ def read_headers(stream):
 
     # We don't attempt to support obsolete line folding.
 
-    headers = []
-    for _ in range(MAX_HEADERS):
+    headers = Headers()
+    for _ in range(MAX_HEADERS + 1):
         line = yield from read_line(stream)
         if line == b'\r\n':
             break
 
         # This may raise "ValueError: not enough values to unpack"
         name, value = line[:-2].split(b':', 1)
-        if not _token_re.match(name):
+        if not _token_re.fullmatch(name):
             raise ValueError("Invalid HTTP header name: %r" % name)
         value = value.strip(b' \t')
-        if not _value_re.match(value):
+        if not _value_re.fullmatch(value):
             raise ValueError("Invalid HTTP header value: %r" % value)
 
-        headers.append((
-            name.decode('ascii'),   # guaranteed to be ASCII at this point
-            value.decode('ascii', 'surrogateescape'),
-        ))
+        name = name.decode('ascii')     # guaranteed to be ASCII at this point
+        value = value.decode('ascii', 'surrogateescape')
+        headers[name] = value
 
     else:
         raise ValueError("Too many HTTP headers")
@@ -196,13 +198,134 @@ def read_line(stream):
     return line
 
 
-def build_headers(raw_headers):
+class MultipleValuesError(LookupError):
     """
-    Build a date structure for HTTP headers from a list of name - value pairs.
-
-    See also https://github.com/aaugustin/websockets/issues/210.
+    Exception raised when :class:`Headers` has more than one value for a key.
 
     """
-    headers = http.client.HTTPMessage()
-    headers._headers = raw_headers  # HACK
-    return headers
+
+    def __str__(self):
+        # Implement the same logic as KeyError_str in Objects/exceptions.c.
+        if len(self.args) == 1:
+            return repr(self.args[0])
+        return super().__str__()
+
+
+class Headers(collections.abc.MutableMapping):
+    """
+    Data structure for working with HTTP headers efficiently.
+
+    A :class:`list` of ``(name, values)`` is inefficient for lookups.
+
+    A :class:`dict` doesn't suffice because header names are case-insensitive
+    and multiple occurrences of headers with the same name are possible.
+
+    :class:`Headers` stores HTTP headers in a hybrid data structure to provide
+    efficient insertions and lookups while preserving the original data.
+
+    In order to account for multiple values with minimal hassle,
+    :class:`Headers` follows this logic:
+
+    - When getting a header with ``headers[name]``:
+        - if there's no value, :exc:`KeyError` is raised;
+        - if there's exactly one value, it's returned;
+        - if there's more than one value, :exc:`MultipleValuesError` is raised.
+
+    - When setting a header with ``headers[name] = value``, the value is
+      appended to the list of values for that header.
+
+    - When deleting a header with ``del headers[name]``, all values for that
+      header are removed (this is slow).
+
+    Other methods for manipulating headers are consistent with this logic.
+
+    As long as no header occurs multiple times, :class:`Headers` behaves like
+    :class:`dict`, except keys are lower-cased to provide case-insensitivity.
+
+    :meth:`get_all()` returns a list of all values for a header and
+    :meth:`raw_items()` returns an iterator of ``(name, values)`` pairs,
+    similar to :meth:`http.client.HTTPMessage`.
+
+    """
+
+    __slots__ = ['_dict', '_list']
+
+    def __init__(self, *args, **kwargs):
+        self._dict = {}
+        self._list = []
+        # MutableMapping.update calls __setitem__ for each (name, value) pair.
+        self.update(*args, **kwargs)
+
+    def __str__(self):
+        return ''.join(
+            '{}: {}\r\n'.format(key, value)
+            for key, value in self._list
+        ) + '\r\n'
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self._list))
+
+    def copy(self):
+        copy = self.__class__()
+        copy._dict = self._dict.copy()
+        copy._list = self._list.copy()
+        return copy
+
+    # Collection methods
+
+    def __contains__(self, key):
+        return key.lower() in self._dict
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    # MutableMapping methods
+
+    def __getitem__(self, key):
+        value = self._dict[key.lower()]
+        if len(value) == 1:
+            return value[0]
+        else:
+            raise MultipleValuesError(key)
+
+    def __setitem__(self, key, value):
+        self._dict.setdefault(key.lower(), []).append(value)
+        self._list.append((key, value))
+
+    def __delitem__(self, key):
+        key_lower = key.lower()
+        self._dict.__delitem__(key_lower)
+        # This is inefficent. Fortunately deleting HTTP headers is uncommon.
+        self._list = [(k, v) for k, v in self._list if k.lower() != key_lower]
+
+    def __eq__(self, other):
+        if not isinstance(other, Headers):
+            return NotImplemented
+        return self._list == other._list
+
+    def clear(self):
+        """
+        Remove all headers.
+
+        """
+        self._dict = {}
+        self._list = []
+
+    # Methods for handling multiple values
+
+    def get_all(self, key):
+        """
+        Return the (possibly empty) list of all values for a header.
+
+        """
+        return self._dict.get(key.lower(), [])
+
+    def raw_items(self):
+        """
+        Return an iterator of (header name, header value).
+
+        """
+        return iter(self._list)

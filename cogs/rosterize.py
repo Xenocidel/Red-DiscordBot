@@ -249,8 +249,13 @@ class Rosterize:
                  "' AND author_uid = '", str(message.author.id), "'"];
         query = "".join(query);
 
+        print("test");
+        rows = [];
         for row in c.execute(query):
-            self.del_db_roster(conn, c, message.server.id, row[0]);
+            rows.append(row[0]);
+
+        for row in rows
+            self.del_db_roster(conn, c, message.server.id, row);
 
         self.dbclose(conn);
 

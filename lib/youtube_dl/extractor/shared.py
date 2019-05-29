@@ -1,11 +1,11 @@
 from __future__ import unicode_literals
 
-import base64
-
 from .common import InfoExtractor
+from ..compat import compat_b64decode
 from ..utils import (
     ExtractorError,
     int_or_none,
+    url_or_none,
     urlencode_postdata,
 )
 
@@ -22,8 +22,8 @@ class SharedBaseIE(InfoExtractor):
 
         video_url = self._extract_video_url(webpage, video_id, url)
 
-        title = base64.b64decode(self._html_search_meta(
-            'full:title', webpage, 'title').encode('utf-8')).decode('utf-8')
+        title = compat_b64decode(self._html_search_meta(
+            'full:title', webpage, 'title')).decode('utf-8')
         filesize = int_or_none(self._html_search_meta(
             'full:size', webpage, 'file size', fatal=False))
 
@@ -87,10 +87,16 @@ class VivoIE(SharedBaseIE):
     }
 
     def _extract_video_url(self, webpage, video_id, *args):
+        def decode_url(encoded_url):
+            return compat_b64decode(encoded_url).decode('utf-8')
+
+        stream_url = url_or_none(decode_url(self._search_regex(
+            r'data-stream\s*=\s*(["\'])(?P<url>(?:(?!\1).)+)\1', webpage,
+            'stream url', default=None, group='url')))
+        if stream_url:
+            return stream_url
         return self._parse_json(
             self._search_regex(
                 r'InitializeStream\s*\(\s*(["\'])(?P<url>(?:(?!\1).)+)\1',
                 webpage, 'stream', group='url'),
-            video_id,
-            transform_source=lambda x: base64.b64decode(
-                x.encode('ascii')).decode('utf-8'))[0]
+            video_id, transform_source=decode_url)[0]

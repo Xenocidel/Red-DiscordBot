@@ -118,29 +118,35 @@ class KalturaIE(InfoExtractor):
                         (?P<q2>['"])_?(?P<partner_id>(?:(?!(?P=q2)).)+)(?P=q2),.*?
                         (?P<q3>['"])entry_?[Ii]d(?P=q3)\s*:\s*
                         (?P<q4>['"])(?P<id>(?:(?!(?P=q4)).)+)(?P=q4)(?:,|\s*\})
-                """, webpage) or
-            re.search(
+                """, webpage)
+            or re.search(
                 r'''(?xs)
                     (?P<q1>["'])
                         (?:https?:)?//cdnapi(?:sec)?\.kaltura\.com(?::\d+)?/(?:(?!(?P=q1)).)*\b(?:p|partner_id)/(?P<partner_id>\d+)(?:(?!(?P=q1)).)*
                     (?P=q1).*?
                     (?:
-                        entry_?[Ii]d|
-                        (?P<q2>["'])entry_?[Ii]d(?P=q2)
-                    )\s*:\s*
+                        (?:
+                            entry_?[Ii]d|
+                            (?P<q2>["'])entry_?[Ii]d(?P=q2)
+                        )\s*:\s*|
+                        \[\s*(?P<q2_1>["'])entry_?[Ii]d(?P=q2_1)\s*\]\s*=\s*
+                    )
                     (?P<q3>["'])(?P<id>(?:(?!(?P=q3)).)+)(?P=q3)
-                ''', webpage) or
-            re.search(
+                ''', webpage)
+            or re.search(
                 r'''(?xs)
-                    <iframe[^>]+src=(?P<q1>["'])
-                      (?:https?:)?//(?:www\.)?kaltura\.com/(?:(?!(?P=q1)).)*\b(?:p|partner_id)/(?P<partner_id>\d+)
+                    <(?:iframe[^>]+src|meta[^>]+\bcontent)=(?P<q1>["'])
+                      (?:https?:)?//(?:(?:www|cdnapi(?:sec)?)\.)?kaltura\.com/(?:(?!(?P=q1)).)*\b(?:p|partner_id)/(?P<partner_id>\d+)
                       (?:(?!(?P=q1)).)*
-                      [?&]entry_id=(?P<id>(?:(?!(?P=q1))[^&])+)
+                      [?&;]entry_id=(?P<id>(?:(?!(?P=q1))[^&])+)
+                      (?:(?!(?P=q1)).)*
                     (?P=q1)
                 ''', webpage)
         )
         if mobj:
             embed_info = mobj.groupdict()
+            for k, v in embed_info.items():
+                embed_info[k] = v.strip()
             url = 'kaltura:%(partner_id)s:%(id)s' % embed_info
             escaped_pid = re.escape(embed_info['partner_id'])
             service_url = re.search(
@@ -188,6 +194,8 @@ class KalturaIE(InfoExtractor):
                 'entryId': video_id,
                 'service': 'baseentry',
                 'ks': '{1:result:ks}',
+                'responseProfile:fields': 'createdAt,dataUrl,duration,name,plays,thumbnailUrl,userId',
+                'responseProfile:type': 1,
             },
             {
                 'action': 'getbyentryid',
