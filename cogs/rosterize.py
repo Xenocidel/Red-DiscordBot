@@ -245,16 +245,14 @@ class Rosterize:
         t = self.setvars(ctx)
         message, margs, conn, c = t
 
-        query = ["SELECT rname FROM rosters WHERE sid = '", str(message.server.id),
-                 "' AND author_uid = '", str(message.author.id), "'"];
-        query = "".join(query);
+        query = "".join(["SELECT rname FROM rosters WHERE sid = '", str(message.server.id),
+                 "' AND author_uid = '", str(message.author.id), "'"]);
 
-        print("test");
         rows = [];
         for row in c.execute(query):
             rows.append(row[0]);
 
-        for row in rows
+        for row in rows:
             self.del_db_roster(conn, c, message.server.id, row);
 
         self.dbclose(conn);
