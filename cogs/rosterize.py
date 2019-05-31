@@ -252,8 +252,21 @@ class Rosterize:
         for row in c.execute(query):
             rows.append(row[0]);
 
-        for row in rows:
-            self.del_db_roster(conn, c, message.server.id, row);
+        if not rows:
+            await self.bot.say("No rosters to delete");
+            return;
+            
+        rname_list = "','".join(rows);
+        query = "".join(["DELETE FROM attendees WHERE sid = '", str(message.server.id),
+                         "' AND rname IN ('", rname_list, "')"]);
+        c.execute(query);
+
+        
+        query = "".join(["DELETE FROM rosters WHERE sid = '", str(message.server.id),
+                         "' AND rname IN ('", rname_list, "')"]);
+        c.execute(query);
+
+        conn.commit();
 
         self.dbclose(conn);
 
