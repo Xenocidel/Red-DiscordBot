@@ -4,11 +4,9 @@ import re
 
 from .common import InfoExtractor
 from ..utils import (
-    determine_ext,
     ExtractorError,
     int_or_none,
     js_to_json,
-    urljoin,
 )
 
 
@@ -16,7 +14,7 @@ class PornHdIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?pornhd\.com/(?:[a-z]{2,4}/)?videos/(?P<id>\d+)(?:/(?P<display_id>.+))?'
     _TESTS = [{
         'url': 'http://www.pornhd.com/videos/9864/selfie-restroom-masturbation-fun-with-chubby-cutie-hd-porn-video',
-        'md5': '87f1540746c1d32ec7a2305c12b96b25',
+        'md5': 'c8b964b1f0a4b5f7f28ae3a5c9f86ad5',
         'info_dict': {
             'id': '9864',
             'display_id': 'selfie-restroom-masturbation-fun-with-chubby-cutie-hd-porn-video',
@@ -25,7 +23,6 @@ class PornHdIE(InfoExtractor):
             'description': 'md5:3748420395e03e31ac96857a8f125b2b',
             'thumbnail': r're:^https?://.*\.jpg',
             'view_count': int,
-            'like_count': int,
             'age_limit': 18,
         }
     }, {
@@ -40,7 +37,6 @@ class PornHdIE(InfoExtractor):
             'description': 'md5:8ff0523848ac2b8f9b065ba781ccf294',
             'thumbnail': r're:^https?://.*\.jpg',
             'view_count': int,
-            'like_count': int,
             'age_limit': 18,
         },
         'skip': 'Not available anymore',
@@ -69,14 +65,12 @@ class PornHdIE(InfoExtractor):
 
         formats = []
         for format_id, video_url in sources.items():
-            video_url = urljoin(url, video_url)
             if not video_url:
                 continue
             height = int_or_none(self._search_regex(
                 r'^(\d+)[pP]', format_id, 'height', default=None))
             formats.append({
                 'url': video_url,
-                'ext': determine_ext(video_url, 'mp4'),
                 'format_id': format_id,
                 'height': height,
             })
@@ -91,11 +85,6 @@ class PornHdIE(InfoExtractor):
             r"poster'?\s*:\s*([\"'])(?P<url>(?:(?!\1).)+)\1", webpage,
             'thumbnail', fatal=False, group='url')
 
-        like_count = int_or_none(self._search_regex(
-            (r'(\d+)\s*</11[^>]+>(?:&nbsp;|\s)*\blikes',
-             r'class=["\']save-count["\'][^>]*>\s*(\d+)'),
-            webpage, 'like count', fatal=False))
-
         return {
             'id': video_id,
             'display_id': display_id,
@@ -103,7 +92,6 @@ class PornHdIE(InfoExtractor):
             'description': description,
             'thumbnail': thumbnail,
             'view_count': view_count,
-            'like_count': like_count,
             'formats': formats,
             'age_limit': 18,
         }

@@ -2,7 +2,6 @@
 from __future__ import unicode_literals
 
 import json
-import re
 
 from .common import InfoExtractor
 from ..utils import (
@@ -33,8 +32,7 @@ class Laola1TvEmbedIE(InfoExtractor):
 
     def _extract_token_url(self, stream_access_url, video_id, data):
         return self._download_json(
-            self._proto_relative_url(stream_access_url, 'https:'), video_id,
-            headers={
+            stream_access_url, video_id, headers={
                 'Content-Type': 'application/json',
             }, data=json.dumps(data).encode())['data']['stream-access'][0]
 
@@ -121,59 +119,9 @@ class Laola1TvEmbedIE(InfoExtractor):
         }
 
 
-class Laola1TvBaseIE(Laola1TvEmbedIE):
-    def _extract_video(self, url):
-        display_id = self._match_id(url)
-        webpage = self._download_webpage(url, display_id)
-
-        if 'Dieser Livestream ist bereits beendet.' in webpage:
-            raise ExtractorError('This live stream has already finished.', expected=True)
-
-        conf = self._parse_json(self._search_regex(
-            r'(?s)conf\s*=\s*({.+?});', webpage, 'conf'),
-            display_id,
-            transform_source=lambda s: js_to_json(re.sub(r'shareurl:.+,', '', s)))
-        video_id = conf['videoid']
-
-        config = self._download_json(conf['configUrl'], video_id, query={
-            'videoid': video_id,
-            'partnerid': conf['partnerid'],
-            'language': conf.get('language', ''),
-            'portal': conf.get('portalid', ''),
-        })
-        error = config.get('error')
-        if error:
-            raise ExtractorError('%s said: %s' % (self.IE_NAME, error), expected=True)
-
-        video_data = config['video']
-        title = video_data['title']
-        is_live = video_data.get('isLivestream') and video_data.get('isLive')
-        meta = video_data.get('metaInformation')
-        sports = meta.get('sports')
-        categories = sports.split(',') if sports else []
-
-        token_url = self._extract_token_url(
-            video_data['streamAccess'], video_id,
-            video_data['abo']['required'])
-
-        formats = self._extract_formats(token_url, video_id)
-
-        return {
-            'id': video_id,
-            'display_id': display_id,
-            'title': self._live_title(title) if is_live else title,
-            'description': video_data.get('description'),
-            'thumbnail': video_data.get('image'),
-            'categories': categories,
-            'formats': formats,
-            'is_live': is_live,
-        }
-
-
-class Laola1TvIE(Laola1TvBaseIE):
+class Laola1TvIE(Laola1TvEmbedIE):
     IE_NAME = 'laola1tv'
     _VALID_URL = r'https?://(?:www\.)?laola1\.tv/[a-z]+-[a-z]+/[^/]+/(?P<id>[^/?#&]+)'
-
     _TESTS = [{
         'url': 'http://www.laola1.tv/de-de/video/straubing-tigers-koelner-haie/227883.html',
         'info_dict': {
@@ -221,30 +169,52 @@ class Laola1TvIE(Laola1TvBaseIE):
     }]
 
     def _real_extract(self, url):
-        return self._extract_video(url)
+        display_id = self._match_id(url)
 
+        webpage = self._download_webpage(url, display_id)
 
-class EHFTVIE(Laola1TvBaseIE):
-    IE_NAME = 'ehftv'
-    _VALID_URL = r'https?://(?:www\.)?ehftv\.com/[a-z]+(?:-[a-z]+)?/[^/]+/(?P<id>[^/?#&]+)'
+        if 'Dieser Livestream ist bereits beendet.' in webpage:
+            raise ExtractorError('This live stream has already finished.', expected=True)
 
-    _TESTS = [{
-        'url': 'https://www.ehftv.com/int/video/paris-saint-germain-handball-pge-vive-kielce/1166761',
-        'info_dict': {
-            'id': '1166761',
-            'display_id': 'paris-saint-germain-handball-pge-vive-kielce',
-            'ext': 'mp4',
-            'title': 'Paris Saint-Germain Handball - PGE Vive Kielce',
-            'is_live': False,
-            'categories': ['Handball'],
-        },
-        'params': {
-            'skip_download': True,
-        },
-    }]
+        conf = self._parse_json(self._search_regex(
+            r'(?s)conf\s*=\s*({.+?});', webpage, 'conf'),
+            display_id, js_to_json)
 
-    def _real_extract(self, url):
-        return self._extract_video(url)
+        video_id = conf['videoid']
+
+        config = self._download_json(conf['configUrl'], video_id, query={
+            'videoid': video_id,
+            'partnerid': conf['partnerid'],
+            'language': conf.get('language', ''),
+            'portal': conf.get('portalid', ''),
+        })
+        error = config.get('error')
+        if error:
+            raise ExtractorError('%s said: %s' % (self.IE_NAME, error), expected=True)
+
+        video_data = config['video']
+        title = video_data['title']
+        is_live = video_data.get('isLivestream') and video_data.get('isLive')
+        meta = video_data.get('metaInformation')
+        sports = meta.get('sports')
+        categories = sports.split(',') if sports else []
+
+        token_url = self._extract_token_url(
+            video_data['streamAccess'], video_id,
+            video_data['abo']['required'])
+
+        formats = self._extract_formats(token_url, video_id)
+
+        return {
+            'id': video_id,
+            'display_id': display_id,
+            'title': self._live_title(title) if is_live else title,
+            'description': video_data.get('description'),
+            'thumbnail': video_data.get('image'),
+            'categories': categories,
+            'formats': formats,
+            'is_live': is_live,
+        }
 
 
 class ITTFIE(InfoExtractor):

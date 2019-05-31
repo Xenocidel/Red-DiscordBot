@@ -14,10 +14,9 @@
 
 from __future__ import absolute_import, division, print_function
 
-import nacl.bindings
 from nacl import encoding
-from nacl import exceptions as exc
-from nacl.utils import EncryptedMessage, StringFixer, random
+import nacl.bindings
+from nacl.utils import EncryptedMessage, StringFixer
 
 
 class SecretBox(encoding.Encodable, StringFixer, object):
@@ -38,24 +37,18 @@ class SecretBox(encoding.Encodable, StringFixer, object):
 
     :cvar KEY_SIZE: The size that the key is required to be.
     :cvar NONCE_SIZE: The size that the nonce is required to be.
-    :cvar MACBYTES: The size of the authentication MAC tag in bytes.
-    :cvar MESSAGEBYTES_MAX: The maximum size of a message which can be
-                            safely encrypted with a single key/nonce
-                            pair.
     """
 
     KEY_SIZE = nacl.bindings.crypto_secretbox_KEYBYTES
     NONCE_SIZE = nacl.bindings.crypto_secretbox_NONCEBYTES
-    MACBYTES = nacl.bindings.crypto_secretbox_MACBYTES
-    MESSAGEBYTES_MAX = nacl.bindings.crypto_secretbox_MESSAGEBYTES_MAX
 
     def __init__(self, key, encoder=encoding.RawEncoder):
         key = encoder.decode(key)
         if not isinstance(key, bytes):
-            raise exc.TypeError("SecretBox must be created from 32 bytes")
+            raise TypeError("SecretBox must be created from 32 bytes")
 
         if len(key) != self.KEY_SIZE:
-            raise exc.ValueError(
+            raise ValueError(
                 "The key must be exactly %s bytes long" %
                 self.KEY_SIZE,
             )
@@ -65,11 +58,10 @@ class SecretBox(encoding.Encodable, StringFixer, object):
     def __bytes__(self):
         return self._key
 
-    def encrypt(self, plaintext, nonce=None, encoder=encoding.RawEncoder):
+    def encrypt(self, plaintext, nonce, encoder=encoding.RawEncoder):
         """
-        Encrypts the plaintext message using the given `nonce` (or generates
-        one randomly if omitted) and returns the ciphertext encoded with the
-        encoder.
+        Encrypts the plaintext message using the given nonce and returns the
+        ciphertext encoded with the encoder.
 
         .. warning:: It is **VITALLY** important that the nonce is a nonce,
             i.e. it is a number used only once for any given key. If you fail
@@ -82,11 +74,8 @@ class SecretBox(encoding.Encodable, StringFixer, object):
         :param encoder: The encoder to use to encode the ciphertext
         :rtype: [:class:`nacl.utils.EncryptedMessage`]
         """
-        if nonce is None:
-            nonce = random(self.NONCE_SIZE)
-
         if len(nonce) != self.NONCE_SIZE:
-            raise exc.ValueError(
+            raise ValueError(
                 "The nonce must be exactly %s bytes long" % self.NONCE_SIZE,
             )
 
@@ -104,9 +93,8 @@ class SecretBox(encoding.Encodable, StringFixer, object):
 
     def decrypt(self, ciphertext, nonce=None, encoder=encoding.RawEncoder):
         """
-        Decrypts the ciphertext using the `nonce` (explicitly, when passed as a
-        parameter or implicitly, when omitted, as part of the ciphertext) and
-        returns the plaintext message.
+        Decrypts the ciphertext using the given nonce and returns the plaintext
+        message.
 
         :param ciphertext: [:class:`bytes`] The encrypted message to decrypt
         :param nonce: [:class:`bytes`] The nonce used when encrypting the
@@ -123,7 +111,7 @@ class SecretBox(encoding.Encodable, StringFixer, object):
             ciphertext = ciphertext[self.NONCE_SIZE:]
 
         if len(nonce) != self.NONCE_SIZE:
-            raise exc.ValueError(
+            raise ValueError(
                 "The nonce must be exactly %s bytes long" % self.NONCE_SIZE,
             )
 

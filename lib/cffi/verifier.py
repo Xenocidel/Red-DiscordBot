@@ -301,6 +301,7 @@ def _get_so_suffixes():
     return suffixes
 
 def _ensure_dir(filename):
-    dirname = os.path.dirname(filename)
-    if dirname and not os.path.isdir(dirname):
-        os.makedirs(dirname)
+    try:
+        os.makedirs(os.path.dirname(filename))
+    except OSError:
+        pass

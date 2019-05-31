@@ -1,7 +1,8 @@
 from __future__ import unicode_literals
 
+import base64
+
 from .common import InfoExtractor
-from ..compat import compat_b64decode
 from ..utils import (
     ExtractorError,
     HEADRequest,
@@ -47,7 +48,7 @@ class HotNewHipHopIE(InfoExtractor):
         if 'mediaKey' not in mkd:
             raise ExtractorError('Did not get a media key')
 
-        redirect_url = compat_b64decode(video_url_base64).decode('utf-8')
+        redirect_url = base64.b64decode(video_url_base64).decode('utf-8')
         redirect_req = HEADRequest(redirect_url)
         req = self._request_webpage(
             redirect_req, video_id,

@@ -4,7 +4,6 @@ import collections
 import json
 import os
 import random
-import re
 
 from .common import InfoExtractor
 from ..compat import (
@@ -28,60 +27,6 @@ from ..utils import (
 class PluralsightBaseIE(InfoExtractor):
     _API_BASE = 'https://app.pluralsight.com'
 
-    _GRAPHQL_EP = '%s/player/api/graphql' % _API_BASE
-    _GRAPHQL_HEADERS = {
-        'Content-Type': 'application/json;charset=UTF-8',
-    }
-    _GRAPHQL_COURSE_TMPL = '''
-query BootstrapPlayer {
-  rpc {
-    bootstrapPlayer {
-      profile {
-        firstName
-        lastName
-        email
-        username
-        userHandle
-        authed
-        isAuthed
-        plan
-      }
-      course(courseId: "%s") {
-        name
-        title
-        courseHasCaptions
-        translationLanguages {
-          code
-          name
-        }
-        supportsWideScreenVideoFormats
-        timestamp
-        modules {
-          name
-          title
-          duration
-          formattedDuration
-          author
-          authorized
-          clips {
-            authorized
-            clipId
-            duration
-            formattedDuration
-            id
-            index
-            moduleIndex
-            moduleTitle
-            name
-            title
-            watched
-          }
-        }
-      }
-    }
-  }
-}'''
-
     def _download_course(self, course_id, url, display_id):
         try:
             return self._download_course_rpc(course_id, url, display_id)
@@ -94,14 +39,20 @@ query BootstrapPlayer {
 
     def _download_course_rpc(self, course_id, url, display_id):
         response = self._download_json(
-            self._GRAPHQL_EP, display_id, data=json.dumps({
-                'query': self._GRAPHQL_COURSE_TMPL % course_id,
-                'variables': {}
-            }).encode('utf-8'), headers=self._GRAPHQL_HEADERS)
+            '%s/player/functions/rpc' % self._API_BASE, display_id,
+            'Downloading course JSON',
+            data=json.dumps({
+                'fn': 'bootstrapPlayer',
+                'payload': {
+                    'courseId': course_id,
+                },
+            }).encode('utf-8'),
+            headers={
+                'Content-Type': 'application/json;charset=utf-8',
+                'Referer': url,
+            })
 
-        course = try_get(
-            response, lambda x: x['data']['rpc']['bootstrapPlayer']['course'],
-            dict)
+        course = try_get(response, lambda x: x['payload']['course'], dict)
         if course:
             return course
 
@@ -139,33 +90,11 @@ class PluralsightIE(PluralsightBaseIE):
         'only_matching': True,
     }]
 
-    GRAPHQL_VIEWCLIP_TMPL = '''
-query viewClip {
-  viewClip(input: {
-    author: "%(author)s",
-    clipIndex: %(clipIndex)d,
-    courseName: "%(courseName)s",
-    includeCaptions: %(includeCaptions)s,
-    locale: "%(locale)s",
-    mediaType: "%(mediaType)s",
-    moduleName: "%(moduleName)s",
-    quality: "%(quality)s"
-  }) {
-    urls {
-      url
-      cdn
-      rank
-      source
-    },
-    status
-  }
-}'''
-
     def _real_initialize(self):
         self._login()
 
     def _login(self):
-        username, password = self._get_login_info()
+        (username, password) = self._get_login_info()
         if username is None:
             return
 
@@ -187,7 +116,7 @@ query viewClip {
             post_url = compat_urlparse.urljoin(self._LOGIN_URL, post_url)
 
         response = self._download_webpage(
-            post_url, None, 'Logging in',
+            post_url, None, 'Logging in as %s' % username,
             data=urlencode_postdata(login_form),
             headers={'Content-Type': 'application/x-www-form-urlencoded'})
 
@@ -197,43 +126,25 @@ query viewClip {
         if error:
             raise ExtractorError('Unable to login: %s' % error, expected=True)
 
-        if all(not re.search(p, response) for p in (
-                r'__INITIAL_STATE__', r'["\']currentUser["\']',
-                # new layout?
-                r'>\s*Sign out\s*<')):
+        if all(p not in response for p in ('__INITIAL_STATE__', '"currentUser"')):
             BLOCKED = 'Your account has been blocked due to suspicious activity'
             if BLOCKED in response:
                 raise ExtractorError(
                     'Unable to login: %s' % BLOCKED, expected=True)
-            MUST_AGREE = 'To continue using Pluralsight, you must agree to'
-            if any(p in response for p in (MUST_AGREE, '>Disagree<', '>Agree<')):
-                raise ExtractorError(
-                    'Unable to login: %s some documents. Go to pluralsight.com, '
-                    'log in and agree with what Pluralsight requires.'
-                    % MUST_AGREE, expected=True)
-
             raise ExtractorError('Unable to log in')
 
-    def _get_subtitles(self, author, clip_idx, clip_id, lang, name, duration, video_id):
-        captions = None
-        if clip_id:
-            captions = self._download_json(
-                '%s/transcript/api/v1/caption/json/%s/%s'
-                % (self._API_BASE, clip_id, lang), video_id,
-                'Downloading captions JSON', 'Unable to download captions JSON',
-                fatal=False)
-        if not captions:
-            captions_post = {
-                'a': author,
-                'cn': int(clip_idx),
-                'lc': lang,
-                'm': name,
-            }
-            captions = self._download_json(
-                '%s/player/retrieve-captions' % self._API_BASE, video_id,
-                'Downloading captions JSON', 'Unable to download captions JSON',
-                fatal=False, data=json.dumps(captions_post).encode('utf-8'),
-                headers={'Content-Type': 'application/json;charset=utf-8'})
+    def _get_subtitles(self, author, clip_id, lang, name, duration, video_id):
+        captions_post = {
+            'a': author,
+            'cn': clip_id,
+            'lc': lang,
+            'm': name,
+        }
+        captions = self._download_json(
+            '%s/player/retrieve-captions' % self._API_BASE, video_id,
+            'Downloading captions JSON', 'Unable to download captions JSON',
+            fatal=False, data=json.dumps(captions_post).encode('utf-8'),
+            headers={'Content-Type': 'application/json;charset=utf-8'})
         if captions:
             return {
                 lang: [{
@@ -253,12 +164,12 @@ query viewClip {
         for num, current in enumerate(subs):
             current = subs[num]
             start, text = (
-                float_or_none(dict_get(current, TIME_OFFSET_KEYS, skip_false_values=False)),
+                float_or_none(dict_get(current, TIME_OFFSET_KEYS)),
                 dict_get(current, TEXT_KEYS))
             if start is None or text is None:
                 continue
             end = duration if num == len(subs) - 1 else float_or_none(
-                dict_get(subs[num + 1], TIME_OFFSET_KEYS, skip_false_values=False))
+                dict_get(subs[num + 1], TIME_OFFSET_KEYS))
             if end is None:
                 continue
             srt += os.linesep.join(
@@ -277,13 +188,13 @@ query viewClip {
 
         author = qs.get('author', [None])[0]
         name = qs.get('name', [None])[0]
-        clip_idx = qs.get('clip', [None])[0]
+        clip_id = qs.get('clip', [None])[0]
         course_name = qs.get('course', [None])[0]
 
-        if any(not f for f in (author, name, clip_idx, course_name,)):
+        if any(not f for f in (author, name, clip_id, course_name,)):
             raise ExtractorError('Invalid URL', expected=True)
 
-        display_id = '%s-%s' % (name, clip_idx)
+        display_id = '%s-%s' % (name, clip_id)
 
         course = self._download_course(course_name, url, display_id)
 
@@ -299,7 +210,7 @@ query viewClip {
                         clip_index = clip_.get('index')
                     if clip_index is None:
                         continue
-                    if compat_str(clip_index) == clip_idx:
+                    if compat_str(clip_index) == clip_id:
                         clip = clip_
                         break
 
@@ -307,7 +218,6 @@ query viewClip {
             raise ExtractorError('Unable to resolve clip')
 
         title = clip['title']
-        clip_id = clip.get('clipName') or clip.get('name') or clip['clipId']
 
         QUALITIES = {
             'low': {'width': 640, 'height': 480},
@@ -327,7 +237,7 @@ query viewClip {
         )
 
         # Some courses also offer widescreen resolution for high quality (see
-        # https://github.com/ytdl-org/youtube-dl/issues/7766)
+        # https://github.com/rg3/youtube-dl/issues/7766)
         widescreen = course.get('supportsWideScreenVideoFormats') is True
         best_quality = 'high-widescreen' if widescreen else 'high'
         if widescreen:
@@ -359,8 +269,8 @@ query viewClip {
                 f = QUALITIES[quality].copy()
                 clip_post = {
                     'author': author,
-                    'includeCaptions': 'false',
-                    'clipIndex': int(clip_idx),
+                    'includeCaptions': False,
+                    'clipIndex': int(clip_id),
                     'courseName': course_name,
                     'locale': 'en',
                     'moduleName': name,
@@ -368,28 +278,16 @@ query viewClip {
                     'quality': '%dx%d' % (f['width'], f['height']),
                 }
                 format_id = '%s-%s' % (ext, quality)
-
-                try:
-                    viewclip = self._download_json(
-                        self._GRAPHQL_EP, display_id,
-                        'Downloading %s viewclip graphql' % format_id,
-                        data=json.dumps({
-                            'query': self.GRAPHQL_VIEWCLIP_TMPL % clip_post,
-                            'variables': {}
-                        }).encode('utf-8'),
-                        headers=self._GRAPHQL_HEADERS)['data']['viewClip']
-                except ExtractorError:
-                    # Still works but most likely will go soon
-                    viewclip = self._download_json(
-                        '%s/video/clips/viewclip' % self._API_BASE, display_id,
-                        'Downloading %s viewclip JSON' % format_id, fatal=False,
-                        data=json.dumps(clip_post).encode('utf-8'),
-                        headers={'Content-Type': 'application/json;charset=utf-8'})
+                viewclip = self._download_json(
+                    '%s/video/clips/viewclip' % self._API_BASE, display_id,
+                    'Downloading %s viewclip JSON' % format_id, fatal=False,
+                    data=json.dumps(clip_post).encode('utf-8'),
+                    headers={'Content-Type': 'application/json;charset=utf-8'})
 
                 # Pluralsight tracks multiple sequential calls to ViewClip API and start
                 # to return 429 HTTP errors after some time (see
-                # https://github.com/ytdl-org/youtube-dl/pull/6989). Moreover it may even lead
-                # to account ban (see https://github.com/ytdl-org/youtube-dl/issues/6842).
+                # https://github.com/rg3/youtube-dl/pull/6989). Moreover it may even lead
+                # to account ban (see https://github.com/rg3/youtube-dl/issues/6842).
                 # To somewhat reduce the probability of these consequences
                 # we will sleep random amount of time before each call to ViewClip.
                 self._sleep(
@@ -425,10 +323,10 @@ query viewClip {
 
         # TODO: other languages?
         subtitles = self.extract_subtitles(
-            author, clip_idx, clip.get('clipId'), 'en', name, duration, display_id)
+            author, clip_id, 'en', name, duration, display_id)
 
         return {
-            'id': clip_id,
+            'id': clip.get('clipName') or clip['name'],
             'title': title,
             'duration': duration,
             'creator': author,

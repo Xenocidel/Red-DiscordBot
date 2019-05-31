@@ -1,13 +1,11 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import base64
 import re
 
 from .common import InfoExtractor
-from ..compat import (
-    compat_b64decode,
-    compat_urllib_parse_unquote,
-)
+from ..compat import compat_urllib_parse_unquote
 
 
 class BigflixIE(InfoExtractor):
@@ -41,8 +39,8 @@ class BigflixIE(InfoExtractor):
             webpage, 'title')
 
         def decode_url(quoted_b64_url):
-            return compat_b64decode(compat_urllib_parse_unquote(
-                quoted_b64_url)).decode('utf-8')
+            return base64.b64decode(compat_urllib_parse_unquote(
+                quoted_b64_url).encode('ascii')).decode('utf-8')
 
         formats = []
         for height, encoded_url in re.findall(

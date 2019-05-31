@@ -8,60 +8,73 @@ from .generic import GenericIE
 from ..utils import (
     determine_ext,
     ExtractorError,
+    qualities,
     int_or_none,
     parse_duration,
-    qualities,
-    str_or_none,
-    try_get,
     unified_strdate,
-    unified_timestamp,
-    update_url_query,
-    url_or_none,
     xpath_text,
+    update_url_query,
 )
 from ..compat import compat_etree_fromstring
 
 
 class ARDMediathekIE(InfoExtractor):
     IE_NAME = 'ARD:mediathek'
-    _VALID_URL = r'^https?://(?:(?:(?:www|classic)\.)?ardmediathek\.de|mediathek\.(?:daserste|rbb-online)\.de|one\.ard\.de)/(?:.*/)(?P<video_id>[0-9]+|[^0-9][^/\?]+)[^/\?]*(?:\?.*)?'
+    _VALID_URL = r'^https?://(?:(?:www\.)?ardmediathek\.de|mediathek\.(?:daserste|rbb-online)\.de)/(?:.*/)(?P<video_id>[0-9]+|[^0-9][^/\?]+)[^/\?]*(?:\?.*)?'
 
     _TESTS = [{
-        # available till 26.07.2022
-        'url': 'http://www.ardmediathek.de/tv/S%C3%9CDLICHT/Was-ist-die-Kunst-der-Zukunft-liebe-Ann/BR-Fernsehen/Video?bcastId=34633636&documentId=44726822',
+        'url': 'http://www.ardmediathek.de/tv/Dokumentation-und-Reportage/Ich-liebe-das-Leben-trotzdem/rbb-Fernsehen/Video?documentId=29582122&bcastId=3822114',
         'info_dict': {
-            'id': '44726822',
+            'id': '29582122',
             'ext': 'mp4',
-            'title': 'Was ist die Kunst der Zukunft, liebe Anna McCarthy?',
-            'description': 'md5:4ada28b3e3b5df01647310e41f3a62f5',
-            'duration': 1740,
+            'title': 'Ich liebe das Leben trotzdem',
+            'description': 'md5:45e4c225c72b27993314b31a84a5261c',
+            'duration': 4557,
         },
         'params': {
             # m3u8 download
             'skip_download': True,
-        }
+        },
+        'skip': 'HTTP Error 404: Not Found',
     }, {
-        'url': 'https://one.ard.de/tv/Mord-mit-Aussicht/Mord-mit-Aussicht-6-39-T%C3%B6dliche-Nach/ONE/Video?bcastId=46384294&documentId=55586872',
-        'only_matching': True,
+        'url': 'http://www.ardmediathek.de/tv/Tatort/Tatort-Scheinwelten-H%C3%B6rfassung-Video/Das-Erste/Video?documentId=29522730&bcastId=602916',
+        'md5': 'f4d98b10759ac06c0072bbcd1f0b9e3e',
+        'info_dict': {
+            'id': '29522730',
+            'ext': 'mp4',
+            'title': 'Tatort: Scheinwelten - Hörfassung (Video tgl. ab 20 Uhr)',
+            'description': 'md5:196392e79876d0ac94c94e8cdb2875f1',
+            'duration': 5252,
+        },
+        'skip': 'HTTP Error 404: Not Found',
     }, {
         # audio
         'url': 'http://www.ardmediathek.de/tv/WDR-H%C3%B6rspiel-Speicher/Tod-eines-Fu%C3%9Fballers/WDR-3/Audio-Podcast?documentId=28488308&bcastId=23074086',
-        'only_matching': True,
+        'md5': '219d94d8980b4f538c7fcb0865eb7f2c',
+        'info_dict': {
+            'id': '28488308',
+            'ext': 'mp3',
+            'title': 'Tod eines Fußballers',
+            'description': 'md5:f6e39f3461f0e1f54bfa48c8875c86ef',
+            'duration': 3240,
+        },
+        'skip': 'HTTP Error 404: Not Found',
     }, {
         'url': 'http://mediathek.daserste.de/sendungen_a-z/328454_anne-will/22429276_vertrauen-ist-gut-spionieren-ist-besser-geht',
         'only_matching': True,
     }, {
         # audio
         'url': 'http://mediathek.rbb-online.de/radio/Hörspiel/Vor-dem-Fest/kulturradio/Audio?documentId=30796318&topRessort=radio&bcastId=9839158',
-        'only_matching': True,
-    }, {
-        'url': 'https://classic.ardmediathek.de/tv/Panda-Gorilla-Co/Panda-Gorilla-Co-Folge-274/Das-Erste/Video?bcastId=16355486&documentId=58234698',
-        'only_matching': True,
+        'md5': '4e8f00631aac0395fee17368ac0e9867',
+        'info_dict': {
+            'id': '30796318',
+            'ext': 'mp3',
+            'title': 'Vor dem Fest',
+            'description': 'md5:c0c1c8048514deaed2a73b3a60eecacb',
+            'duration': 3287,
+        },
+        'skip': 'Video is no longer available',
     }]
-
-    @classmethod
-    def suitable(cls, url):
-        return False if ARDBetaMediathekIE.suitable(url) else super(ARDMediathekIE, cls).suitable(url)
 
     def _extract_media_info(self, media_info_url, webpage, video_id):
         media_info = self._download_json(
@@ -113,8 +126,6 @@ class ARDMediathekIE(InfoExtractor):
                 quality = stream.get('_quality')
                 server = stream.get('_server')
                 for stream_url in stream_urls:
-                    if not url_or_none(stream_url):
-                        continue
                     ext = determine_ext(stream_url)
                     if quality != 'auto' and ext in ('f4m', 'm3u8'):
                         continue
@@ -135,11 +146,13 @@ class ARDMediathekIE(InfoExtractor):
                                 'play_path': stream_url,
                                 'format_id': 'a%s-rtmp-%s' % (num, quality),
                             }
-                        else:
+                        elif stream_url.startswith('http'):
                             f = {
                                 'url': stream_url,
                                 'format_id': 'a%s-%s-%s' % (num, ext, quality)
                             }
+                        else:
+                            continue
                         m = re.search(r'_(?P<width>\d+)x(?P<height>\d+)\.mp4$', stream_url)
                         if m:
                             f.update({
@@ -183,18 +196,13 @@ class ARDMediathekIE(InfoExtractor):
         title = self._html_search_regex(
             [r'<h1(?:\s+class="boxTopHeadline")?>(.*?)</h1>',
              r'<meta name="dcterms\.title" content="(.*?)"/>',
-             r'<h4 class="headline">(.*?)</h4>',
-             r'<title[^>]*>(.*?)</title>'],
+             r'<h4 class="headline">(.*?)</h4>'],
             webpage, 'title')
         description = self._html_search_meta(
             'dcterms.abstract', webpage, 'description', default=None)
         if description is None:
             description = self._html_search_meta(
-                'description', webpage, 'meta description', default=None)
-        if description is None:
-            description = self._html_search_regex(
-                r'<p\s+class="teasertext">(.+?)</p>',
-                webpage, 'teaser text', default=None)
+                'description', webpage, 'meta description')
 
         # Thumbnail is sometimes not present.
         # It is in the mobile version, but that seems to use a different URL
@@ -243,23 +251,20 @@ class ARDMediathekIE(InfoExtractor):
 
 class ARDIE(InfoExtractor):
     _VALID_URL = r'(?P<mainurl>https?://(www\.)?daserste\.de/[^?#]+/videos/(?P<display_id>[^/?#]+)-(?P<id>[0-9]+))\.html'
-    _TESTS = [{
-        # available till 14.02.2019
-        'url': 'http://www.daserste.de/information/talk/maischberger/videos/das-groko-drama-zerlegen-sich-die-volksparteien-video-102.html',
-        'md5': '8e4ec85f31be7c7fc08a26cdbc5a1f49',
+    _TEST = {
+        'url': 'http://www.daserste.de/information/reportage-dokumentation/dokus/videos/die-story-im-ersten-mission-unter-falscher-flagge-100.html',
+        'md5': 'd216c3a86493f9322545e045ddc3eb35',
         'info_dict': {
-            'display_id': 'das-groko-drama-zerlegen-sich-die-volksparteien-video',
-            'id': '102',
+            'display_id': 'die-story-im-ersten-mission-unter-falscher-flagge',
+            'id': '100',
             'ext': 'mp4',
-            'duration': 4435.0,
-            'title': 'Das GroKo-Drama: Zerlegen sich die Volksparteien?',
-            'upload_date': '20180214',
+            'duration': 2600,
+            'title': 'Die Story im Ersten: Mission unter falscher Flagge',
+            'upload_date': '20140804',
             'thumbnail': r're:^https?://.*\.jpg$',
         },
-    }, {
-        'url': 'http://www.daserste.de/information/reportage-dokumentation/dokus/videos/die-story-im-ersten-mission-unter-falscher-flagge-100.html',
-        'only_matching': True,
-    }]
+        'skip': 'HTTP Error 404: Not Found',
+    }
 
     def _real_extract(self, url):
         mobj = re.match(self._VALID_URL, url)
@@ -300,101 +305,3 @@ class ARDIE(InfoExtractor):
             'upload_date': upload_date,
             'thumbnail': thumbnail,
         }
-
-
-class ARDBetaMediathekIE(InfoExtractor):
-    _VALID_URL = r'https://(?:beta|www)\.ardmediathek\.de/[^/]+/(?:player|live)/(?P<video_id>[a-zA-Z0-9]+)(?:/(?P<display_id>[^/?#]+))?'
-    _TESTS = [{
-        'url': 'https://beta.ardmediathek.de/ard/player/Y3JpZDovL2Rhc2Vyc3RlLmRlL3RhdG9ydC9mYmM4NGM1NC0xNzU4LTRmZGYtYWFhZS0wYzcyZTIxNGEyMDE/die-robuste-roswita',
-        'md5': '2d02d996156ea3c397cfc5036b5d7f8f',
-        'info_dict': {
-            'display_id': 'die-robuste-roswita',
-            'id': 'Y3JpZDovL2Rhc2Vyc3RlLmRlL3RhdG9ydC9mYmM4NGM1NC0xNzU4LTRmZGYtYWFhZS0wYzcyZTIxNGEyMDE',
-            'title': 'Tatort: Die robuste Roswita',
-            'description': r're:^Der Mord.*trüber ist als die Ilm.',
-            'duration': 5316,
-            'thumbnail': 'https://img.ardmediathek.de/standard/00/55/43/59/34/-1774185891/16x9/960?mandant=ard',
-            'upload_date': '20180826',
-            'ext': 'mp4',
-        },
-    }, {
-        'url': 'https://www.ardmediathek.de/ard/player/Y3JpZDovL3N3ci5kZS9hZXgvbzEwNzE5MTU/',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.ardmediathek.de/swr/live/Y3JpZDovL3N3ci5kZS8xMzQ4MTA0Mg',
-        'only_matching': True,
-    }]
-
-    def _real_extract(self, url):
-        mobj = re.match(self._VALID_URL, url)
-        video_id = mobj.group('video_id')
-        display_id = mobj.group('display_id') or video_id
-
-        webpage = self._download_webpage(url, display_id)
-        data_json = self._search_regex(r'window\.__APOLLO_STATE__\s*=\s*(\{.*);\n', webpage, 'json')
-        data = self._parse_json(data_json, display_id)
-
-        res = {
-            'id': video_id,
-            'display_id': display_id,
-        }
-        formats = []
-        subtitles = {}
-        geoblocked = False
-        for widget in data.values():
-            if widget.get('_geoblocked') is True:
-                geoblocked = True
-            if '_duration' in widget:
-                res['duration'] = int_or_none(widget['_duration'])
-            if 'clipTitle' in widget:
-                res['title'] = widget['clipTitle']
-            if '_previewImage' in widget:
-                res['thumbnail'] = widget['_previewImage']
-            if 'broadcastedOn' in widget:
-                res['timestamp'] = unified_timestamp(widget['broadcastedOn'])
-            if 'synopsis' in widget:
-                res['description'] = widget['synopsis']
-            subtitle_url = url_or_none(widget.get('_subtitleUrl'))
-            if subtitle_url:
-                subtitles.setdefault('de', []).append({
-                    'ext': 'ttml',
-                    'url': subtitle_url,
-                })
-            if '_quality' in widget:
-                format_url = url_or_none(try_get(
-                    widget, lambda x: x['_stream']['json'][0]))
-                if not format_url:
-                    continue
-                ext = determine_ext(format_url)
-                if ext == 'f4m':
-                    formats.extend(self._extract_f4m_formats(
-                        format_url + '?hdcore=3.11.0',
-                        video_id, f4m_id='hds', fatal=False))
-                elif ext == 'm3u8':
-                    formats.extend(self._extract_m3u8_formats(
-                        format_url, video_id, 'mp4', m3u8_id='hls',
-                        fatal=False))
-                else:
-                    # HTTP formats are not available when geoblocked is True,
-                    # other formats are fine though
-                    if geoblocked:
-                        continue
-                    quality = str_or_none(widget.get('_quality'))
-                    formats.append({
-                        'format_id': ('http-' + quality) if quality else 'http',
-                        'url': format_url,
-                        'preference': 10,  # Plain HTTP, that's nice
-                    })
-
-        if not formats and geoblocked:
-            self.raise_geo_restricted(
-                msg='This video is not available due to geoblocking',
-                countries=['DE'])
-
-        self._sort_formats(formats)
-        res.update({
-            'subtitles': subtitles,
-            'formats': formats,
-        })
-
-        return res

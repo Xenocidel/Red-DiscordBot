@@ -14,17 +14,14 @@
 
 from __future__ import absolute_import, division, print_function
 
-from nacl import exceptions as exc
 from nacl._sodium import ffi, lib
-from nacl.exceptions import ensure
+from nacl.exceptions import CryptoError
 
 
 crypto_secretbox_KEYBYTES = lib.crypto_secretbox_keybytes()
 crypto_secretbox_NONCEBYTES = lib.crypto_secretbox_noncebytes()
 crypto_secretbox_ZEROBYTES = lib.crypto_secretbox_zerobytes()
 crypto_secretbox_BOXZEROBYTES = lib.crypto_secretbox_boxzerobytes()
-crypto_secretbox_MACBYTES = lib.crypto_secretbox_macbytes()
-crypto_secretbox_MESSAGEBYTES_MAX = lib.crypto_secretbox_messagebytes_max()
 
 
 def crypto_secretbox(message, nonce, key):
@@ -38,16 +35,16 @@ def crypto_secretbox(message, nonce, key):
     :rtype: bytes
     """
     if len(key) != crypto_secretbox_KEYBYTES:
-        raise exc.ValueError("Invalid key")
+        raise ValueError("Invalid key")
 
     if len(nonce) != crypto_secretbox_NONCEBYTES:
-        raise exc.ValueError("Invalid nonce")
+        raise ValueError("Invalid nonce")
 
     padded = b"\x00" * crypto_secretbox_ZEROBYTES + message
     ciphertext = ffi.new("unsigned char[]", len(padded))
 
-    res = lib.crypto_secretbox(ciphertext, padded, len(padded), nonce, key)
-    ensure(res == 0, "Encryption failed", raising=exc.CryptoError)
+    if lib.crypto_secretbox(ciphertext, padded, len(padded), nonce, key) != 0:
+        raise CryptoError("Encryption failed")
 
     ciphertext = ffi.buffer(ciphertext, len(padded))
     return ciphertext[crypto_secretbox_BOXZEROBYTES:]
@@ -64,18 +61,17 @@ def crypto_secretbox_open(ciphertext, nonce, key):
     :rtype: bytes
     """
     if len(key) != crypto_secretbox_KEYBYTES:
-        raise exc.ValueError("Invalid key")
+        raise ValueError("Invalid key")
 
     if len(nonce) != crypto_secretbox_NONCEBYTES:
-        raise exc.ValueError("Invalid nonce")
+        raise ValueError("Invalid nonce")
 
     padded = b"\x00" * crypto_secretbox_BOXZEROBYTES + ciphertext
     plaintext = ffi.new("unsigned char[]", len(padded))
 
-    res = lib.crypto_secretbox_open(
-        plaintext, padded, len(padded), nonce, key)
-    ensure(res == 0, "Decryption failed. Ciphertext failed verification",
-           raising=exc.CryptoError)
+    if lib.crypto_secretbox_open(
+            plaintext, padded, len(padded), nonce, key) != 0:
+        raise CryptoError("Decryption failed. Ciphertext failed verification")
 
     plaintext = ffi.buffer(plaintext, len(padded))
     return plaintext[crypto_secretbox_ZEROBYTES:]

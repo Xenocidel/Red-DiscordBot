@@ -14,12 +14,12 @@
 
 from __future__ import absolute_import, division, print_function
 
-import os
-
 import six
 
+import nacl.bindings
 
-class EncryptedMessage(bytes):
+
+class EncryptedMessage(six.binary_type):
     """
     A bytes subclass that holds a messaged that has been encrypted by a
     :class:`SecretBox`.
@@ -51,17 +51,10 @@ class StringFixer(object):
 
     def __str__(self):
         if six.PY3:
-            return str(self.__bytes__())
+            return self.__unicode__()
         else:
             return self.__bytes__()
 
 
-def bytes_as_string(bytes_in):
-    if six.PY3:
-        return bytes_in.decode('ascii')
-    else:
-        return bytes_in
-
-
 def random(size=32):
-    return os.urandom(size)
+    return nacl.bindings.randombytes(size)

@@ -42,7 +42,6 @@ class XAttrMetadataPP(PostProcessor):
                 'user.dublincore.format': 'format',
             }
 
-            num_written = 0
             for xattrname, infoname in xattr_mapping.items():
 
                 value = info.get(infoname)
@@ -53,7 +52,6 @@ class XAttrMetadataPP(PostProcessor):
 
                     byte_value = value.encode('utf-8')
                     write_xattr(filename, xattrname, byte_value)
-                    num_written += 1
 
             return [], info
 
@@ -64,8 +62,8 @@ class XAttrMetadataPP(PostProcessor):
         except XAttrMetadataError as e:
             if e.reason == 'NO_SPACE':
                 self._downloader.report_warning(
-                    'There\'s no disk space left, disk quota exceeded or filesystem xattr limit exceeded. '
-                    + (('Some ' if num_written else '') + 'extended attributes are not written.').capitalize())
+                    'There\'s no disk space left or disk quota exceeded. ' +
+                    'Extended attributes are not written.')
             elif e.reason == 'VALUE_TOO_LONG':
                 self._downloader.report_warning(
                     'Unable to write extended attributes due to too long values.')

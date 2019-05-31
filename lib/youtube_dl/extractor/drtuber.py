@@ -4,15 +4,13 @@ import re
 
 from .common import InfoExtractor
 from ..utils import (
-    int_or_none,
     NO_DEFAULT,
-    parse_duration,
     str_to_int,
 )
 
 
 class DrTuberIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:(?:www|m)\.)?drtuber\.com/(?:video|embed)/(?P<id>\d+)(?:/(?P<display_id>[\w-]+))?'
+    _VALID_URL = r'https?://(?:www\.)?drtuber\.com/(?:video|embed)/(?P<id>\d+)(?:/(?P<display_id>[\w-]+))?'
     _TESTS = [{
         'url': 'http://www.drtuber.com/video/1740434/hot-perky-blonde-naked-golf',
         'md5': '93e680cf2536ad0dfb7e74d94a89facd',
@@ -29,9 +27,6 @@ class DrTuberIE(InfoExtractor):
         }
     }, {
         'url': 'http://www.drtuber.com/embed/489939',
-        'only_matching': True,
-    }, {
-        'url': 'http://m.drtuber.com/video/3893529/lingerie-blowjob-from-beautiful-teen',
         'only_matching': True,
     }]
 
@@ -67,13 +62,8 @@ class DrTuberIE(InfoExtractor):
                 })
         self._sort_formats(formats)
 
-        duration = int_or_none(video_data.get('duration')) or parse_duration(
-            video_data.get('duration_format'))
-
         title = self._html_search_regex(
-            (r'<h1[^>]+class=["\']title[^>]+>([^<]+)',
-             r'<title>([^<]+)\s*@\s+DrTuber',
-             r'class="title_watch"[^>]*><(?:p|h\d+)[^>]*>([^<]+)<',
+            (r'class="title_watch"[^>]*><(?:p|h\d+)[^>]*>([^<]+)<',
              r'<p[^>]+class="title_substrate">([^<]+)</p>',
              r'<title>([^<]+) - \d+'),
             webpage, 'title')
@@ -108,5 +98,4 @@ class DrTuberIE(InfoExtractor):
             'comment_count': comment_count,
             'categories': categories,
             'age_limit': self._rta_search(webpage),
-            'duration': duration,
         }

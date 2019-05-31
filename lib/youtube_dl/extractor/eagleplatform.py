@@ -4,12 +4,14 @@ from __future__ import unicode_literals
 import re
 
 from .common import InfoExtractor
-from ..compat import compat_HTTPError
+from ..compat import (
+    compat_HTTPError,
+    compat_str,
+)
 from ..utils import (
     ExtractorError,
     int_or_none,
     unsmuggle_url,
-    url_or_none,
 )
 
 
@@ -175,7 +177,7 @@ class EaglePlatformIE(InfoExtractor):
             video_id, 'Downloading mp4 JSON', fatal=False)
         if mp4_data:
             for format_id, format_url in mp4_data.get('data', {}).items():
-                if not url_or_none(format_url):
+                if not isinstance(format_url, compat_str):
                     continue
                 height = int_or_none(format_id)
                 if height is not None and m3u8_formats_dict.get(height):

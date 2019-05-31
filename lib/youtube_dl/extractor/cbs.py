@@ -2,7 +2,6 @@ from __future__ import unicode_literals
 
 from .theplatform import ThePlatformFeedIE
 from ..utils import (
-    ExtractorError,
     int_or_none,
     find_xpath_attr,
     xpath_element,
@@ -13,17 +12,13 @@ from ..utils import (
 
 class CBSBaseIE(ThePlatformFeedIE):
     def _parse_smil_subtitles(self, smil, namespace=None, subtitles_lang='en'):
-        subtitles = {}
-        for k, ext in [('sMPTE-TTCCURL', 'tt'), ('ClosedCaptionURL', 'ttml'), ('webVTTCaptionURL', 'vtt')]:
-            cc_e = find_xpath_attr(smil, self._xpath_ns('.//param', namespace), 'name', k)
-            if cc_e is not None:
-                cc_url = cc_e.get('value')
-                if cc_url:
-                    subtitles.setdefault(subtitles_lang, []).append({
-                        'ext': ext,
-                        'url': cc_url,
-                    })
-        return subtitles
+        closed_caption_e = find_xpath_attr(smil, self._xpath_ns('.//param', namespace), 'name', 'ClosedCaptionURL')
+        return {
+            'en': [{
+                'ext': 'ttml',
+                'url': closed_caption_e.attrib['value'],
+            }]
+        } if closed_caption_e is not None and closed_caption_e.attrib.get('value') else []
 
 
 class CBSIE(CBSBaseIE):
@@ -66,10 +61,9 @@ class CBSIE(CBSBaseIE):
         asset_types = []
         subtitles = {}
         formats = []
-        last_e = None
         for item in items_data.findall('.//item'):
             asset_type = xpath_text(item, 'assetType')
-            if not asset_type or asset_type in asset_types or asset_type in ('HLS_FPS', 'DASH_CENC'):
+            if not asset_type or asset_type in asset_types:
                 continue
             asset_types.append(asset_type)
             query = {
@@ -80,17 +74,11 @@ class CBSIE(CBSBaseIE):
                 query['formats'] = 'MPEG4,M3U'
             elif asset_type in ('RTMP', 'WIFI', '3G'):
                 query['formats'] = 'MPEG4,FLV'
-            try:
-                tp_formats, tp_subtitles = self._extract_theplatform_smil(
-                    update_url_query(tp_release_url, query), content_id,
-                    'Downloading %s SMIL data' % asset_type)
-            except ExtractorError as e:
-                last_e = e
-                continue
+            tp_formats, tp_subtitles = self._extract_theplatform_smil(
+                update_url_query(tp_release_url, query), content_id,
+                'Downloading %s SMIL data' % asset_type)
             formats.extend(tp_formats)
             subtitles = self._merge_subtitles(subtitles, tp_subtitles)
-        if last_e and not formats:
-            raise last_e
         self._sort_formats(formats)
 
         info = self._extract_theplatform_metadata(tp_path, content_id)

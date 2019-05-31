@@ -35,7 +35,7 @@ class CuriosityStreamBaseIE(InfoExtractor):
         return result['data']
 
     def _real_initialize(self):
-        email, password = self._get_login_info()
+        (email, password) = self._get_login_info()
         if email is None:
             return
         result = self._download_json(
@@ -46,24 +46,8 @@ class CuriosityStreamBaseIE(InfoExtractor):
         self._handle_errors(result)
         self._auth_token = result['message']['auth_token']
 
-
-class CuriosityStreamIE(CuriosityStreamBaseIE):
-    IE_NAME = 'curiositystream'
-    _VALID_URL = r'https?://(?:app\.)?curiositystream\.com/video/(?P<id>\d+)'
-    _TEST = {
-        'url': 'https://app.curiositystream.com/video/2',
-        'md5': '262bb2f257ff301115f1973540de8983',
-        'info_dict': {
-            'id': '2',
-            'ext': 'mp4',
-            'title': 'How Did You Develop The Internet?',
-            'description': 'Vint Cerf, Google\'s Chief Internet Evangelist, describes how he and Bob Kahn created the internet.',
-        }
-    }
-
-    def _real_extract(self, url):
-        video_id = self._match_id(url)
-        media = self._call_api('media/' + video_id, video_id)
+    def _extract_media_info(self, media):
+        video_id = compat_str(media['id'])
         title = media['title']
 
         formats = []
@@ -130,21 +114,38 @@ class CuriosityStreamIE(CuriosityStreamBaseIE):
         }
 
 
+class CuriosityStreamIE(CuriosityStreamBaseIE):
+    IE_NAME = 'curiositystream'
+    _VALID_URL = r'https?://app\.curiositystream\.com/video/(?P<id>\d+)'
+    _TEST = {
+        'url': 'https://app.curiositystream.com/video/2',
+        'md5': '262bb2f257ff301115f1973540de8983',
+        'info_dict': {
+            'id': '2',
+            'ext': 'mp4',
+            'title': 'How Did You Develop The Internet?',
+            'description': 'Vint Cerf, Google\'s Chief Internet Evangelist, describes how he and Bob Kahn created the internet.',
+        }
+    }
+
+    def _real_extract(self, url):
+        video_id = self._match_id(url)
+        media = self._call_api('media/' + video_id, video_id)
+        return self._extract_media_info(media)
+
+
 class CuriosityStreamCollectionIE(CuriosityStreamBaseIE):
     IE_NAME = 'curiositystream:collection'
-    _VALID_URL = r'https?://(?:app\.)?curiositystream\.com/(?:collection|series)/(?P<id>\d+)'
-    _TESTS = [{
+    _VALID_URL = r'https?://app\.curiositystream\.com/collection/(?P<id>\d+)'
+    _TEST = {
         'url': 'https://app.curiositystream.com/collection/2',
         'info_dict': {
             'id': '2',
             'title': 'Curious Minds: The Internet',
             'description': 'How is the internet shaping our lives in the 21st Century?',
         },
-        'playlist_mincount': 17,
-    }, {
-        'url': 'https://curiositystream.com/series/2',
-        'only_matching': True,
-    }]
+        'playlist_mincount': 12,
+    }
 
     def _real_extract(self, url):
         collection_id = self._match_id(url)
@@ -152,10 +153,7 @@ class CuriosityStreamCollectionIE(CuriosityStreamBaseIE):
             'collections/' + collection_id, collection_id)
         entries = []
         for media in collection.get('media', []):
-            media_id = compat_str(media.get('id'))
-            entries.append(self.url_result(
-                'https://curiositystream.com/video/' + media_id,
-                CuriosityStreamIE.ie_key(), media_id))
+            entries.append(self._extract_media_info(media))
         return self.playlist_result(
             entries, collection_id,
             collection.get('title'), collection.get('description'))

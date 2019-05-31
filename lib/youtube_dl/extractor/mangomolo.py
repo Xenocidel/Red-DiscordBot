@@ -1,12 +1,13 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
+import base64
+
 from .common import InfoExtractor
-from ..compat import (
-    compat_b64decode,
-    compat_urllib_parse_unquote,
+from ..compat import compat_urllib_parse_unquote
+from ..utils import (
+    int_or_none,
 )
-from ..utils import int_or_none
 
 
 class MangomoloBaseIE(InfoExtractor):
@@ -50,4 +51,4 @@ class MangomoloLiveIE(MangomoloBaseIE):
     _IS_LIVE = True
 
     def _get_real_id(self, page_id):
-        return compat_b64decode(compat_urllib_parse_unquote(page_id)).decode()
+        return base64.b64decode(compat_urllib_parse_unquote(page_id).encode()).decode()

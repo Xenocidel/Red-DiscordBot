@@ -4,12 +4,15 @@ handshake according to `section 4 of RFC 6455`_.
 
 .. _section 4 of RFC 6455: http://tools.ietf.org/html/rfc6455#section-4
 
-Functions defined in this module manipulate HTTP headers. The ``headers``
-argument must implement ``get`` and ``__setitem__`` and ``get`` —  a small
-subset of the :class:`~collections.abc.MutableMapping` abstract base class.
+It provides functions to implement the handshake with any existing HTTP
+library. You must pass to these functions:
 
-Headers names and values are :class:`str` objects containing only ASCII
-characters.
+- A ``set_header`` function accepting a header name and a header value,
+- A ``get_header`` function accepting a header name and returning the header
+  value.
+
+The inputs and outputs of ``get_header`` and ``set_header`` are :class:`str`
+objects containing only ASCII characters.
 
 Some checks cannot be performed because they depend too much on the
 context; instead, they're documented below.
@@ -32,12 +35,10 @@ To open a connection, a client must:
 """
 
 import base64
-import binascii
 import hashlib
 import random
 
-from .exceptions import InvalidHeaderValue, InvalidUpgrade
-from .headers import parse_connection, parse_upgrade
+from .exceptions import InvalidHandshake
 
 
 __all__ = [
@@ -45,26 +46,26 @@ __all__ = [
     'build_response', 'check_response',
 ]
 
-GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
-def build_request(headers):
+def build_request(set_header):
     """
     Build a handshake request to send to the server.
 
     Return the ``key`` which must be passed to :func:`check_response`.
 
     """
-    raw_key = bytes(random.getrandbits(8) for _ in range(16))
-    key = base64.b64encode(raw_key).decode()
-    headers['Upgrade'] = 'websocket'
-    headers['Connection'] = 'Upgrade'
-    headers['Sec-WebSocket-Key'] = key
-    headers['Sec-WebSocket-Version'] = '13'
+    rand = bytes(random.getrandbits(8) for _ in range(16))
+    key = base64.b64encode(rand).decode()
+    set_header('Upgrade', 'WebSocket')
+    set_header('Connection', 'Upgrade')
+    set_header('Sec-WebSocket-Key', key)
+    set_header('Sec-WebSocket-Version', '13')
     return key
 
 
-def check_request(headers):
+def check_request(get_header):
     """
     Check a handshake request received from the client.
 
@@ -80,44 +81,33 @@ def check_request(headers):
     responsibility of the caller.
 
     """
-    connection = parse_connection(headers.get('Connection', ''))
-    if not any(value.lower() == 'upgrade' for value in connection):
-        raise InvalidUpgrade('Connection', headers.get('Connection', ''))
-
-    upgrade = parse_upgrade(headers.get('Upgrade', ''))
-    # For compatibility with non-strict implementations, ignore case when
-    # checking the Upgrade header. It's supposed to be 'WebSocket'.
-    if not (len(upgrade) == 1 and upgrade[0].lower() == 'websocket'):
-        raise InvalidUpgrade('Upgrade', headers.get('Upgrade', ''))
-
-    key = headers.get('Sec-WebSocket-Key', '')
     try:
-        raw_key = base64.b64decode(key.encode(), validate=True)
-    except binascii.Error:
-        raise InvalidHeaderValue('Sec-WebSocket-Key', key)
-    if len(raw_key) != 16:
-        raise InvalidHeaderValue('Sec-WebSocket-Key', key)
+        assert get_header('Upgrade').lower() == 'websocket'
+        assert any(
+            token.strip() == 'upgrade'
+            for token in get_header('Connection').lower().split(','))
+        key = get_header('Sec-WebSocket-Key')
+        assert len(base64.b64decode(key.encode(), validate=True)) == 16
+        assert get_header('Sec-WebSocket-Version') == '13'
+    except Exception as exc:
+        raise InvalidHandshake("Invalid request") from exc
+    else:
+        return key
 
-    version = headers.get('Sec-WebSocket-Version', '')
-    if version != '13':
-        raise InvalidHeaderValue('Sec-WebSocket-Version', version)
 
-    return key
-
-
-def build_response(headers, key):
+def build_response(set_header, key):
     """
     Build a handshake response to send to the client.
 
     ``key`` comes from :func:`check_request`.
 
     """
-    headers['Upgrade'] = 'websocket'
-    headers['Connection'] = 'Upgrade'
-    headers['Sec-WebSocket-Accept'] = accept(key)
+    set_header('Upgrade', 'WebSocket')
+    set_header('Connection', 'Upgrade')
+    set_header('Sec-WebSocket-Accept', accept(key))
 
 
-def check_response(headers, key):
+def check_response(get_header, key):
     """
     Check a handshake response received from the server.
 
@@ -133,19 +123,14 @@ def check_response(headers, key):
     the caller.
 
     """
-    connection = parse_connection(headers.get('Connection', ''))
-    if not any(value.lower() == 'upgrade' for value in connection):
-        raise InvalidUpgrade('Connection', headers.get('Connection', ''))
-
-    upgrade = parse_upgrade(headers.get('Upgrade', ''))
-    # For compatibility with non-strict implementations, ignore case when
-    # checking the Upgrade header. It's supposed to be 'WebSocket'.
-    if not (len(upgrade) == 1 and upgrade[0].lower() == 'websocket'):
-        raise InvalidUpgrade('Upgrade', headers.get('Upgrade', ''))
-
-    if headers.get('Sec-WebSocket-Accept', '') != accept(key):
-        raise InvalidHeaderValue(
-            'Sec-WebSocket-Accept', headers.get('Sec-WebSocket-Accept', ''))
+    try:
+        assert get_header('Upgrade').lower() == 'websocket'
+        assert any(
+            token.strip() == 'upgrade'
+            for token in get_header('Connection').lower().split(','))
+        assert get_header('Sec-WebSocket-Accept') == accept(key)
+    except Exception as exc:
+        raise InvalidHandshake("Invalid response") from exc
 
 
 def accept(key):

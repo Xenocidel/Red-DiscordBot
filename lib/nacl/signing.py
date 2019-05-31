@@ -14,15 +14,17 @@
 
 from __future__ import absolute_import, division, print_function
 
-import nacl.bindings
+import six
+
 from nacl import encoding
-from nacl import exceptions as exc
+
+import nacl.bindings
 from nacl.public import (PrivateKey as _Curve25519_PrivateKey,
                          PublicKey as _Curve25519_PublicKey)
 from nacl.utils import StringFixer, random
 
 
-class SignedMessage(bytes):
+class SignedMessage(six.binary_type):
     """
     A bytes subclass that holds a messaged that has been signed by a
     :class:`SigningKey`.
@@ -63,10 +65,10 @@ class VerifyKey(encoding.Encodable, StringFixer, object):
         # Decode the key
         key = encoder.decode(key)
         if not isinstance(key, bytes):
-            raise exc.TypeError("VerifyKey must be created from 32 bytes")
+            raise TypeError("VerifyKey must be created from 32 bytes")
 
         if len(key) != nacl.bindings.crypto_sign_PUBLICKEYBYTES:
-            raise exc.ValueError(
+            raise ValueError(
                 "The key must be exactly %s bytes long" %
                 nacl.bindings.crypto_sign_PUBLICKEYBYTES,
             )
@@ -75,17 +77,6 @@ class VerifyKey(encoding.Encodable, StringFixer, object):
 
     def __bytes__(self):
         return self._key
-
-    def __hash__(self):
-        return hash(bytes(self))
-
-    def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
-        return nacl.bindings.sodium_memcmp(bytes(self), bytes(other))
-
-    def __ne__(self, other):
-        return not (self == other)
 
     def verify(self, smessage, signature=None, encoder=encoding.RawEncoder):
         """
@@ -145,12 +136,11 @@ class SigningKey(encoding.Encodable, StringFixer, object):
         # Decode the seed
         seed = encoder.decode(seed)
         if not isinstance(seed, bytes):
-            raise exc.TypeError(
-                "SigningKey must be created from a 32 byte seed")
+            raise TypeError("SigningKey must be created from a 32 byte seed")
 
         # Verify that our seed is the proper size
         if len(seed) != nacl.bindings.crypto_sign_SEEDBYTES:
-            raise exc.ValueError(
+            raise ValueError(
                 "The seed must be exactly %d bytes long" %
                 nacl.bindings.crypto_sign_SEEDBYTES
             )
@@ -164,21 +154,10 @@ class SigningKey(encoding.Encodable, StringFixer, object):
     def __bytes__(self):
         return self._seed
 
-    def __hash__(self):
-        return hash(bytes(self))
-
-    def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
-        return nacl.bindings.sodium_memcmp(bytes(self), bytes(other))
-
-    def __ne__(self, other):
-        return not (self == other)
-
     @classmethod
     def generate(cls):
         """
-        Generates a random :class:`~nacl.signing.SigningKey` object.
+        Generates a random :class:`~nacl.signing.SingingKey` object.
 
         :rtype: :class:`~nacl.signing.SigningKey`
         """

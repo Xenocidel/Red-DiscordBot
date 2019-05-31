@@ -1,10 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import re
-
 from .common import InfoExtractor
-from ..compat import compat_etree_fromstring
 from ..utils import (
     xpath_element,
     xpath_text,
@@ -46,15 +43,10 @@ class FazIE(InfoExtractor):
 
         webpage = self._download_webpage(url, video_id)
         description = self._og_search_description(webpage)
-        media = self._html_search_regex(
-            r"data-videojs-media='([^']+)",
-            webpage, 'media')
-        if media == 'extern':
-            perform_url = self._search_regex(
-                r"<iframe[^>]+?src='((?:http:)?//player\.performgroup\.com/eplayer/eplayer\.html#/?[0-9a-f]{26}\.[0-9a-z]{26})",
-                webpage, 'perform url')
-            return self.url_result(perform_url)
-        config = compat_etree_fromstring(media)
+        config_xml_url = self._search_regex(
+            r'videoXMLURL\s*=\s*"([^"]+)', webpage, 'config xml url')
+        config = self._download_xml(
+            config_xml_url, video_id, 'Downloading config xml')
 
         encodings = xpath_element(config, 'ENCODINGS', 'encodings', True)
         formats = []
@@ -63,24 +55,12 @@ class FazIE(InfoExtractor):
             if encoding is not None:
                 encoding_url = xpath_text(encoding, 'FILENAME')
                 if encoding_url:
-                    tbr = xpath_text(encoding, 'AVERAGEBITRATE', 1000)
-                    if tbr:
-                        tbr = int_or_none(tbr.replace(',', '.'))
-                    f = {
+                    formats.append({
                         'url': encoding_url,
                         'format_id': code.lower(),
                         'quality': pref,
-                        'tbr': tbr,
-                        'vcodec': xpath_text(encoding, 'CODEC'),
-                    }
-                    mobj = re.search(r'(\d+)x(\d+)_(\d+)\.mp4', encoding_url)
-                    if mobj:
-                        f.update({
-                            'width': int(mobj.group(1)),
-                            'height': int(mobj.group(2)),
-                            'tbr': tbr or int(mobj.group(3)),
-                        })
-                    formats.append(f)
+                        'tbr': int_or_none(xpath_text(encoding, 'AVERAGEBITRATE')),
+                    })
         self._sort_formats(formats)
 
         return {

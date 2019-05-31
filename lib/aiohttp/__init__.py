@@ -1,216 +1,41 @@
-__version__ = '3.5.4'
+__version__ = '1.0.5'
 
-from typing import Tuple  # noqa
+# Deprecated, keep it here for a while for backward compatibility.
+import multidict  # noqa
 
-from . import hdrs
-from .client import (
-    BaseConnector,
-    ClientConnectionError,
-    ClientConnectorCertificateError,
-    ClientConnectorError,
-    ClientConnectorSSLError,
-    ClientError,
-    ClientHttpProxyError,
-    ClientOSError,
-    ClientPayloadError,
-    ClientProxyConnectionError,
-    ClientResponse,
-    ClientRequest,
-    ClientResponseError,
-    ClientSSLError,
-    ClientSession,
-    ClientTimeout,
-    ClientWebSocketResponse,
-    ContentTypeError,
-    Fingerprint,
-    InvalidURL,
-    RequestInfo,
-    ServerConnectionError,
-    ServerDisconnectedError,
-    ServerFingerprintMismatch,
-    ServerTimeoutError,
-    TCPConnector,
-    UnixConnector,
-    WSServerHandshakeError,
-    request
-)
+# This relies on each of the submodules having an __all__ variable.
 
-from .cookiejar import CookieJar, DummyCookieJar
-from .formdata import FormData
-from .helpers import BasicAuth, ChainMapProxy
-from .http import (
-    HttpVersion,
-    HttpVersion10,
-    HttpVersion11,
-    WSMsgType,
-    WSCloseCode,
-    WSMessage,
-    WebSocketError
-)
+from multidict import *  # noqa
+from . import hdrs  # noqa
+from .protocol import *  # noqa
+from .connector import *  # noqa
+from .client import *  # noqa
+from .client_reqrep import *  # noqa
+from .errors import *  # noqa
+from .helpers import *  # noqa
+from .parsers import *  # noqa
+from .streams import *  # noqa
+from .multipart import *  # noqa
+from .client_ws import ClientWebSocketResponse  # noqa
+from ._ws_impl import WSMsgType, WSCloseCode, WSMessage, WebSocketError  # noqa
+from .file_sender import FileSender  # noqa
+from .cookiejar import CookieJar  # noqa
+from .resolver import *  # noqa
 
-from .multipart import (
-    BadContentDispositionHeader,
-    BadContentDispositionParam,
-    BodyPartReader,
-    MultipartReader,
-    MultipartWriter,
-    content_disposition_filename,
-    parse_content_disposition
-)
 
-from .payload import (
-    AsyncIterablePayload,
-    BufferedReaderPayload,
-    BytesIOPayload,
-    BytesPayload,
-    IOBasePayload,
-    JsonPayload,
-    PAYLOAD_REGISTRY,
-    Payload,
-    StringIOPayload,
-    StringPayload,
-    TextIOPayload,
-    get_payload,
-    payload_type
-)
+MsgType = WSMsgType  # backward compatibility
 
-from .payload_streamer import streamer
 
-from .resolver import AsyncResolver, DefaultResolver, ThreadedResolver
-
-from .signals import Signal
-
-from .streams import (
-    DataQueue,
-    EMPTY_PAYLOAD,
-    EofStream,
-    FlowControlDataQueue,
-    StreamReader
-)
-
-from .tracing import (
-    TraceConfig,
-    TraceConnectionCreateEndParams,
-    TraceConnectionCreateStartParams,
-    TraceConnectionQueuedEndParams,
-    TraceConnectionQueuedStartParams,
-    TraceConnectionReuseconnParams,
-    TraceDnsCacheHitParams,
-    TraceDnsCacheMissParams,
-    TraceDnsResolveHostEndParams,
-    TraceDnsResolveHostStartParams,
-    TraceRequestChunkSentParams,
-    TraceRequestEndParams,
-    TraceRequestExceptionParams,
-    TraceRequestRedirectParams,
-    TraceRequestStartParams,
-    TraceResponseChunkReceivedParams
-)
-
-__all__ = (
-    'hdrs',
-    # client
-    'BaseConnector',
-    'ClientConnectionError',
-    'ClientConnectorCertificateError',
-    'ClientConnectorError',
-    'ClientConnectorSSLError',
-    'ClientError',
-    'ClientHttpProxyError',
-    'ClientOSError',
-    'ClientPayloadError',
-    'ClientProxyConnectionError',
-    'ClientResponse',
-    'ClientRequest',
-    'ClientResponseError',
-    'ClientSSLError',
-    'ClientSession',
-    'ClientTimeout',
-    'ClientWebSocketResponse',
-    'ContentTypeError',
-    'Fingerprint',
-    'InvalidURL',
-    'RequestInfo',
-    'ServerConnectionError',
-    'ServerDisconnectedError',
-    'ServerFingerprintMismatch',
-    'ServerTimeoutError',
-    'TCPConnector',
-    'UnixConnector',
-    'WSServerHandshakeError',
-    'request',
-    # cookiejar
-    'CookieJar',
-    'DummyCookieJar',
-    # formdata
-    'FormData',
-    # helpers
-    'BasicAuth',
-    'ChainMapProxy',
-    # http
-    'HttpVersion',
-    'HttpVersion10',
-    'HttpVersion11',
-    'WSMsgType',
-    'WSCloseCode',
-    'WSMessage',
-    'WebSocketError',
-    # multipart
-    'BadContentDispositionHeader',
-    'BadContentDispositionParam',
-    'BodyPartReader',
-    'MultipartReader',
-    'MultipartWriter',
-    'content_disposition_filename',
-    'parse_content_disposition',
-    # payload
-    'AsyncIterablePayload',
-    'BufferedReaderPayload',
-    'BytesIOPayload',
-    'BytesPayload',
-    'IOBasePayload',
-    'JsonPayload',
-    'PAYLOAD_REGISTRY',
-    'Payload',
-    'StringIOPayload',
-    'StringPayload',
-    'TextIOPayload',
-    'get_payload',
-    'payload_type',
-    # payload_streamer
-    'streamer',
-    # resolver
-    'AsyncResolver',
-    'DefaultResolver',
-    'ThreadedResolver',
-    # signals
-    'Signal',
-    'DataQueue',
-    'EMPTY_PAYLOAD',
-    'EofStream',
-    'FlowControlDataQueue',
-    'StreamReader',
-    # tracing
-    'TraceConfig',
-    'TraceConnectionCreateEndParams',
-    'TraceConnectionCreateStartParams',
-    'TraceConnectionQueuedEndParams',
-    'TraceConnectionQueuedStartParams',
-    'TraceConnectionReuseconnParams',
-    'TraceDnsCacheHitParams',
-    'TraceDnsCacheMissParams',
-    'TraceDnsResolveHostEndParams',
-    'TraceDnsResolveHostStartParams',
-    'TraceRequestChunkSentParams',
-    'TraceRequestEndParams',
-    'TraceRequestExceptionParams',
-    'TraceRequestRedirectParams',
-    'TraceRequestStartParams',
-    'TraceResponseChunkReceivedParams',
-)  # type: Tuple[str, ...]
-
-try:
-    from .worker import GunicornWebWorker, GunicornUVLoopWebWorker  # noqa
-    __all__ += ('GunicornWebWorker', 'GunicornUVLoopWebWorker')
-except ImportError:  # pragma: no cover
-    pass
+__all__ = (client.__all__ +  # noqa
+           client_reqrep.__all__ +  # noqa
+           errors.__all__ +  # noqa
+           helpers.__all__ +  # noqa
+           parsers.__all__ +  # noqa
+           protocol.__all__ +  # noqa
+           connector.__all__ +  # noqa
+           streams.__all__ +  # noqa
+           multidict.__all__ +  # noqa
+           multipart.__all__ +  # noqa
+           ('hdrs', 'FileSender', 'WSMsgType', 'MsgType', 'WSCloseCode',
+            'WebSocketError', 'WSMessage',
+            'ClientWebSocketResponse', 'CookieJar'))

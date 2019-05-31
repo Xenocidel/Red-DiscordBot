@@ -57,8 +57,7 @@ class NoovoIE(InfoExtractor):
 
         webpage = self._download_webpage(url, video_id)
 
-        brightcove_id = self._search_regex(
-            r'data-video-id=["\'](\d+)', webpage, 'brightcove id')
+        bc_url = BrightcoveNewIE._extract_url(self, webpage)
 
         data = self._parse_json(
             self._search_regex(
@@ -90,10 +89,7 @@ class NoovoIE(InfoExtractor):
         return {
             '_type': 'url_transparent',
             'ie_key': BrightcoveNewIE.ie_key(),
-            'url': smuggle_url(
-                self.BRIGHTCOVE_URL_TEMPLATE % brightcove_id,
-                {'geo_countries': ['CA']}),
-            'id': brightcove_id,
+            'url': smuggle_url(bc_url, {'geo_countries': ['CA']}),
             'title': title,
             'description': description,
             'series': series,

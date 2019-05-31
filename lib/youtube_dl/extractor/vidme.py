@@ -3,13 +3,15 @@ from __future__ import unicode_literals
 import itertools
 
 from .common import InfoExtractor
-from ..compat import compat_HTTPError
+from ..compat import (
+    compat_HTTPError,
+    compat_str,
+)
 from ..utils import (
     ExtractorError,
     int_or_none,
     float_or_none,
     parse_iso8601,
-    url_or_none,
 )
 
 
@@ -164,8 +166,8 @@ class VidmeIE(InfoExtractor):
 
         formats = []
         for f in video.get('formats', []):
-            format_url = url_or_none(f.get('uri'))
-            if not format_url:
+            format_url = f.get('uri')
+            if not format_url or not isinstance(format_url, compat_str):
                 continue
             format_type = f.get('type')
             if format_type == 'dash':

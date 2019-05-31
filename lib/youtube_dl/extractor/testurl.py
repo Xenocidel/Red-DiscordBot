@@ -61,4 +61,8 @@ class TestURLIE(InfoExtractor):
 
         self.to_screen('Test URL: %s' % tc['url'])
 
-        return self.url_result(tc['url'], video_id=video_id)
+        return {
+            '_type': 'url',
+            'url': tc['url'],
+            'id': video_id,
+        }

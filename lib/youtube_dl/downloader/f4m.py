@@ -1,12 +1,12 @@
 from __future__ import division, unicode_literals
 
+import base64
 import io
 import itertools
 import time
 
 from .fragment import FragmentFD
 from ..compat import (
-    compat_b64decode,
     compat_etree_fromstring,
     compat_urlparse,
     compat_urllib_error,
@@ -238,22 +238,13 @@ def write_metadata_tag(stream, metadata):
 
 
 def remove_encrypted_media(media):
-    return list(filter(lambda e: 'drmAdditionalHeaderId' not in e.attrib
-                                 and 'drmAdditionalHeaderSetId' not in e.attrib,
+    return list(filter(lambda e: 'drmAdditionalHeaderId' not in e.attrib and
+                                 'drmAdditionalHeaderSetId' not in e.attrib,
                        media))
 
 
-def _add_ns(prop, ver=1):
-    return '{http://ns.adobe.com/f4m/%d.0}%s' % (ver, prop)
-
-
-def get_base_url(manifest):
-    base_url = xpath_text(
-        manifest, [_add_ns('baseURL'), _add_ns('baseURL', 2)],
-        'base URL', default=None)
-    if base_url:
-        base_url = base_url.strip()
-    return base_url
+def _add_ns(prop):
+    return '{http://ns.adobe.com/f4m/1.0}%s' % prop
 
 
 class F4mFD(FragmentFD):
@@ -267,8 +258,8 @@ class F4mFD(FragmentFD):
         media = doc.findall(_add_ns('media'))
         if not media:
             self.report_error('No media found')
-        for e in (doc.findall(_add_ns('drmAdditionalHeader'))
-                  + doc.findall(_add_ns('drmAdditionalHeaderSet'))):
+        for e in (doc.findall(_add_ns('drmAdditionalHeader')) +
+                  doc.findall(_add_ns('drmAdditionalHeaderSet'))):
             # If id attribute is missing it's valid for all media nodes
             # without drmAdditionalHeaderId or drmAdditionalHeaderSetId attribute
             if 'id' not in e.attrib:
@@ -312,7 +303,7 @@ class F4mFD(FragmentFD):
             boot_info = self._get_bootstrap_from_url(bootstrap_url)
         else:
             bootstrap_url = None
-            bootstrap = compat_b64decode(node.text)
+            bootstrap = base64.b64decode(node.text.encode('ascii'))
             boot_info = read_bootstrap_info(bootstrap)
         return boot_info, bootstrap_url
 
@@ -324,8 +315,8 @@ class F4mFD(FragmentFD):
         urlh = self.ydl.urlopen(self._prepare_url(info_dict, man_url))
         man_url = urlh.geturl()
         # Some manifests may be malformed, e.g. prosiebensat1 generated manifests
-        # (see https://github.com/ytdl-org/youtube-dl/issues/6215#issuecomment-121704244
-        # and https://github.com/ytdl-org/youtube-dl/issues/7823)
+        # (see https://github.com/rg3/youtube-dl/issues/6215#issuecomment-121704244
+        # and https://github.com/rg3/youtube-dl/issues/7823)
         manifest = fix_xml_ampersands(urlh.read().decode('utf-8', 'ignore')).strip()
 
         doc = compat_etree_fromstring(manifest)
@@ -339,17 +330,17 @@ class F4mFD(FragmentFD):
             rate, media = list(filter(
                 lambda f: int(f[0]) == requested_bitrate, formats))[0]
 
-        # Prefer baseURL for relative URLs as per 11.2 of F4M 3.0 spec.
-        man_base_url = get_base_url(doc) or man_url
-
-        base_url = compat_urlparse.urljoin(man_base_url, media.attrib['url'])
+        base_url = compat_urlparse.urljoin(man_url, media.attrib['url'])
         bootstrap_node = doc.find(_add_ns('bootstrapInfo'))
-        boot_info, bootstrap_url = self._parse_bootstrap_node(
-            bootstrap_node, man_base_url)
+        # From Adobe F4M 3.0 spec:
+        # The <baseURL> element SHALL be the base URL for all relative
+        # (HTTP-based) URLs in the manifest. If <baseURL> is not present, said
+        # URLs should be relative to the location of the containing document.
+        boot_info, bootstrap_url = self._parse_bootstrap_node(bootstrap_node, man_url)
         live = boot_info['live']
         metadata_node = media.find(_add_ns('metadata'))
         if metadata_node is not None:
-            metadata = compat_b64decode(metadata_node.text)
+            metadata = base64.b64decode(metadata_node.text.encode('ascii'))
         else:
             metadata = None
 
@@ -409,7 +400,7 @@ class F4mFD(FragmentFD):
                             # In tests, segments may be truncated, and thus
                             # FlvReader may not be able to parse the whole
                             # chunk. If so, write the segment as is
-                            # See https://github.com/ytdl-org/youtube-dl/issues/9214
+                            # See https://github.com/rg3/youtube-dl/issues/9214
                             dest_stream.write(down_data)
                             break
                         raise

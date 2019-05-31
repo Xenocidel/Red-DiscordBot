@@ -3,7 +3,7 @@
 #
 # CLexer class: lexer for the C language
 #
-# Eli Bendersky [https://eli.thegreenplace.net/]
+# Eli Bendersky [http://eli.thegreenplace.net]
 # License: BSD
 #------------------------------------------------------------------------------
 import re
@@ -482,3 +482,4 @@ class CLexer(object):
     def t_error(self, t):
         msg = 'Illegal character %s' % repr(t.value[0])
         self._error(msg, t)
+

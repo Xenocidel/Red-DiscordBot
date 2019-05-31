@@ -27,14 +27,14 @@ class BiliBiliIE(InfoExtractor):
 
     _TESTS = [{
         'url': 'http://www.bilibili.tv/video/av1074402/',
-        'md5': '5f7d29e1a2872f3df0cf76b1f87d3788',
+        'md5': '9fa226fe2b8a9a4d5a69b4c6a183417e',
         'info_dict': {
             'id': '1074402',
-            'ext': 'flv',
+            'ext': 'mp4',
             'title': '【金坷垃】金泡沫',
             'description': 'md5:ce18c2a2d2193f0df2917d270f2e5923',
-            'duration': 308.067,
-            'timestamp': 1398012678,
+            'duration': 308.315,
+            'timestamp': 1398012660,
             'upload_date': '20140420',
             'thumbnail': r're:^https?://.+\.jpg',
             'uploader': '菊子桑',
@@ -59,42 +59,21 @@ class BiliBiliIE(InfoExtractor):
         'url': 'http://www.bilibili.com/video/av8903802/',
         'info_dict': {
             'id': '8903802',
+            'ext': 'mp4',
             'title': '阿滴英文｜英文歌分享#6 "Closer',
             'description': '滴妹今天唱Closer給你聽! 有史以来，被推最多次也是最久的歌曲，其实歌词跟我原本想像差蛮多的，不过还是好听！ 微博@阿滴英文',
+            'uploader': '阿滴英文',
+            'uploader_id': '65880958',
+            'timestamp': 1488382620,
+            'upload_date': '20170301',
         },
-        'playlist': [{
-            'info_dict': {
-                'id': '8903802_part1',
-                'ext': 'flv',
-                'title': '阿滴英文｜英文歌分享#6 "Closer',
-                'description': 'md5:3b1b9e25b78da4ef87e9b548b88ee76a',
-                'uploader': '阿滴英文',
-                'uploader_id': '65880958',
-                'timestamp': 1488382634,
-                'upload_date': '20170301',
-            },
-            'params': {
-                'skip_download': True,  # Test metadata only
-            },
-        }, {
-            'info_dict': {
-                'id': '8903802_part2',
-                'ext': 'flv',
-                'title': '阿滴英文｜英文歌分享#6 "Closer',
-                'description': 'md5:3b1b9e25b78da4ef87e9b548b88ee76a',
-                'uploader': '阿滴英文',
-                'uploader_id': '65880958',
-                'timestamp': 1488382634,
-                'upload_date': '20170301',
-            },
-            'params': {
-                'skip_download': True,  # Test metadata only
-            },
-        }]
+        'params': {
+            'skip_download': True,  # Test metadata only
+        },
     }]
 
-    _APP_KEY = 'iVGUTjsxvpLeuDCf'
-    _BILIBILI_KEY = 'aHRmhWMLkdeMuILqORnYZocwMBpMEOdt'
+    _APP_KEY = '84956560bc028eb7'
+    _BILIBILI_KEY = '94aba54af9065f71de72f5508f1cd42e'
 
     def _report_error(self, result):
         if 'message' in result:
@@ -113,12 +92,8 @@ class BiliBiliIE(InfoExtractor):
         webpage = self._download_webpage(url, video_id)
 
         if 'anime/' not in url:
-            cid = self._search_regex(
-                r'\bcid(?:["\']:|=)(\d+)', webpage, 'cid',
-                default=None
-            ) or compat_parse_qs(self._search_regex(
+            cid = compat_parse_qs(self._search_regex(
                 [r'EmbedPlayer\([^)]+,\s*"([^"]+)"\)',
-                 r'EmbedPlayer\([^)]+,\s*\\"([^"]+)\\"\)',
                  r'<iframe[^>]+src="https://secure\.bilibili\.com/secure,([^"]+)"'],
                 webpage, 'player parameters'))['cid'][0]
         else:
@@ -127,7 +102,6 @@ class BiliBiliIE(InfoExtractor):
                     video_id, anime_id, compat_urlparse.urljoin(url, '//bangumi.bilibili.com/anime/%s' % anime_id)))
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Referer': url
             }
             headers.update(self.geo_verification_headers())
 
@@ -139,66 +113,48 @@ class BiliBiliIE(InfoExtractor):
                 self._report_error(js)
             cid = js['result']['cid']
 
-        headers = {
-            'Referer': url
-        }
-        headers.update(self.geo_verification_headers())
+        payload = 'appkey=%s&cid=%s&otype=json&quality=2&type=mp4' % (self._APP_KEY, cid)
+        sign = hashlib.md5((payload + self._BILIBILI_KEY).encode('utf-8')).hexdigest()
+
+        video_info = self._download_json(
+            'http://interface.bilibili.com/playurl?%s&sign=%s' % (payload, sign),
+            video_id, note='Downloading video info page',
+            headers=self.geo_verification_headers())
+
+        if 'durl' not in video_info:
+            self._report_error(video_info)
 
         entries = []
 
-        RENDITIONS = ('qn=80&quality=80&type=', 'quality=2&type=mp4')
-        for num, rendition in enumerate(RENDITIONS, start=1):
-            payload = 'appkey=%s&cid=%s&otype=json&%s' % (self._APP_KEY, cid, rendition)
-            sign = hashlib.md5((payload + self._BILIBILI_KEY).encode('utf-8')).hexdigest()
-
-            video_info = self._download_json(
-                'http://interface.bilibili.com/v2/playurl?%s&sign=%s' % (payload, sign),
-                video_id, note='Downloading video info page',
-                headers=headers, fatal=num == len(RENDITIONS))
-
-            if not video_info:
-                continue
-
-            if 'durl' not in video_info:
-                if num < len(RENDITIONS):
-                    continue
-                self._report_error(video_info)
-
-            for idx, durl in enumerate(video_info['durl']):
-                formats = [{
-                    'url': durl['url'],
-                    'filesize': int_or_none(durl['size']),
-                }]
-                for backup_url in durl.get('backup_url', []):
-                    formats.append({
-                        'url': backup_url,
-                        # backup URLs have lower priorities
-                        'preference': -2 if 'hd.mp4' in backup_url else -3,
-                    })
-
-                for a_format in formats:
-                    a_format.setdefault('http_headers', {}).update({
-                        'Referer': url,
-                    })
-
-                self._sort_formats(formats)
-
-                entries.append({
-                    'id': '%s_part%s' % (video_id, idx),
-                    'duration': float_or_none(durl.get('length'), 1000),
-                    'formats': formats,
+        for idx, durl in enumerate(video_info['durl']):
+            formats = [{
+                'url': durl['url'],
+                'filesize': int_or_none(durl['size']),
+            }]
+            for backup_url in durl.get('backup_url', []):
+                formats.append({
+                    'url': backup_url,
+                    # backup URLs have lower priorities
+                    'preference': -2 if 'hd.mp4' in backup_url else -3,
                 })
-            break
 
-        title = self._html_search_regex(
-            ('<h1[^>]+\btitle=(["\'])(?P<title>(?:(?!\1).)+)\1',
-             '(?s)<h1[^>]*>(?P<title>.+?)</h1>'), webpage, 'title',
-            group='title')
+            for a_format in formats:
+                a_format.setdefault('http_headers', {}).update({
+                    'Referer': url,
+                })
+
+            self._sort_formats(formats)
+
+            entries.append({
+                'id': '%s_part%s' % (video_id, idx),
+                'duration': float_or_none(durl.get('length'), 1000),
+                'formats': formats,
+            })
+
+        title = self._html_search_regex('<h1[^>]*>([^<]+)</h1>', webpage, 'title')
         description = self._html_search_meta('description', webpage)
         timestamp = unified_timestamp(self._html_search_regex(
-            r'<time[^>]+datetime="([^"]+)"', webpage, 'upload time',
-            default=None) or self._html_search_meta(
-            'uploadDate', webpage, 'timestamp', default=None))
+            r'<time[^>]+datetime="([^"]+)"', webpage, 'upload time', default=None))
         thumbnail = self._html_search_meta(['og:image', 'thumbnailUrl'], webpage)
 
         # TODO 'view_count' requires deobfuscating Javascript
@@ -212,16 +168,13 @@ class BiliBiliIE(InfoExtractor):
         }
 
         uploader_mobj = re.search(
-            r'<a[^>]+href="(?:https?:)?//space\.bilibili\.com/(?P<id>\d+)"[^>]*>(?P<name>[^<]+)',
+            r'<a[^>]+href="(?:https?:)?//space\.bilibili\.com/(?P<id>\d+)"[^>]+title="(?P<name>[^"]+)"',
             webpage)
         if uploader_mobj:
             info.update({
                 'uploader': uploader_mobj.group('name'),
                 'uploader_id': uploader_mobj.group('id'),
             })
-        if not info.get('uploader'):
-            info['uploader'] = self._html_search_meta(
-                'author', webpage, 'uploader', default=None)
 
         for entry in entries:
             entry.update(info)

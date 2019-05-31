@@ -45,7 +45,7 @@ class XVideosIE(InfoExtractor):
         video_id = self._match_id(url)
 
         webpage = self._download_webpage(
-            'https://www.xvideos.com/video%s/' % video_id, video_id)
+            'http://www.xvideos.com/video%s/' % video_id, video_id)
 
         mobj = re.search(r'<h1 class="inlineError">(.+?)</h1>', webpage)
         if mobj:
@@ -57,17 +57,8 @@ class XVideosIE(InfoExtractor):
             webpage, 'title', default=None,
             group='title') or self._og_search_title(webpage)
 
-        thumbnails = []
-        for preference, thumbnail in enumerate(('', '169')):
-            thumbnail_url = self._search_regex(
-                r'setThumbUrl%s\(\s*(["\'])(?P<thumbnail>(?:(?!\1).)+)\1' % thumbnail,
-                webpage, 'thumbnail', default=None, group='thumbnail')
-            if thumbnail_url:
-                thumbnails.append({
-                    'url': thumbnail_url,
-                    'preference': preference,
-                })
-
+        thumbnail = self._search_regex(
+            r'url_bigthumb=(.+?)&amp', webpage, 'thumbnail', fatal=False)
         duration = int_or_none(self._og_search_property(
             'duration', webpage, default=None)) or parse_duration(
             self._search_regex(
@@ -105,6 +96,6 @@ class XVideosIE(InfoExtractor):
             'formats': formats,
             'title': title,
             'duration': duration,
-            'thumbnails': thumbnails,
+            'thumbnail': thumbnail,
             'age_limit': 18,
         }

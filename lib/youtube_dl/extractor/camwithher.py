@@ -25,7 +25,6 @@ class CamWithHerIE(InfoExtractor):
             'comment_count': int,
             'uploader': 'MileenaK',
             'upload_date': '20160322',
-            'age_limit': 18,
         },
         'params': {
             'skip_download': True,
@@ -85,5 +84,4 @@ class CamWithHerIE(InfoExtractor):
             'comment_count': comment_count,
             'uploader': uploader,
             'upload_date': upload_date,
-            'age_limit': 18
         }

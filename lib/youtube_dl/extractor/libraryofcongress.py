@@ -16,15 +16,16 @@ from ..utils import (
 class LibraryOfCongressIE(InfoExtractor):
     IE_NAME = 'loc'
     IE_DESC = 'Library of Congress'
-    _VALID_URL = r'https?://(?:www\.)?loc\.gov/(?:item/|today/cyberlc/feature_wdesc\.php\?.*\brec=)(?P<id>[0-9a-z_.]+)'
+    _VALID_URL = r'https?://(?:www\.)?loc\.gov/(?:item/|today/cyberlc/feature_wdesc\.php\?.*\brec=)(?P<id>[0-9]+)'
     _TESTS = [{
         # embedded via <div class="media-player"
         'url': 'http://loc.gov/item/90716351/',
-        'md5': '6ec0ae8f07f86731b1b2ff70f046210a',
+        'md5': '353917ff7f0255aa6d4b80a034833de8',
         'info_dict': {
             'id': '90716351',
             'ext': 'mp4',
             'title': "Pa's trip to Mars",
+            'thumbnail': r're:^https?://.*\.jpg$',
             'duration': 0,
             'view_count': int,
         },
@@ -56,12 +57,6 @@ class LibraryOfCongressIE(InfoExtractor):
         'params': {
             'skip_download': True,
         },
-    }, {
-        'url': 'https://www.loc.gov/item/ihas.200197114/',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.loc.gov/item/afc1981005_afs20503/',
-        'only_matching': True,
     }]
 
     def _real_extract(self, url):
@@ -72,13 +67,12 @@ class LibraryOfCongressIE(InfoExtractor):
             (r'id=(["\'])media-player-(?P<id>.+?)\1',
              r'<video[^>]+id=(["\'])uuid-(?P<id>.+?)\1',
              r'<video[^>]+data-uuid=(["\'])(?P<id>.+?)\1',
-             r'mediaObjectId\s*:\s*(["\'])(?P<id>.+?)\1',
-             r'data-tab="share-media-(?P<id>[0-9A-F]{32})"'),
+             r'mediaObjectId\s*:\s*(["\'])(?P<id>.+?)\1'),
             webpage, 'media id', group='id')
 
         data = self._download_json(
             'https://media.loc.gov/services/v1/media?id=%s&context=json' % media_id,
-            media_id)['mediaObject']
+            video_id)['mediaObject']
 
         derivative = data['derivatives'][0]
         media_url = derivative['derivativeUrl']
@@ -95,29 +89,25 @@ class LibraryOfCongressIE(InfoExtractor):
         if ext not in ('mp4', 'mp3'):
             media_url += '.mp4' if is_video else '.mp3'
 
-        formats = []
-        if '/vod/mp4:' in media_url:
-            formats.append({
-                'url': media_url.replace('/vod/mp4:', '/hls-vod/media/') + '.m3u8',
+        if 'vod/mp4:' in media_url:
+            formats = [{
+                'url': media_url.replace('vod/mp4:', 'hls-vod/media/') + '.m3u8',
                 'format_id': 'hls',
                 'ext': 'mp4',
                 'protocol': 'm3u8_native',
                 'quality': 1,
-            })
-        http_format = {
-            'url': re.sub(r'(://[^/]+/)(?:[^/]+/)*(?:mp4|mp3):', r'\1', media_url),
-            'format_id': 'http',
-            'quality': 1,
-        }
-        if not is_video:
-            http_format['vcodec'] = 'none'
-        formats.append(http_format)
+            }]
+        elif 'vod/mp3:' in media_url:
+            formats = [{
+                'url': media_url.replace('vod/mp3:', ''),
+                'vcodec': 'none',
+            }]
 
         download_urls = set()
         for m in re.finditer(
                 r'<option[^>]+value=(["\'])(?P<url>.+?)\1[^>]+data-file-download=[^>]+>\s*(?P<id>.+?)(?:(?:&nbsp;|\s+)\((?P<size>.+?)\))?\s*<', webpage):
             format_id = m.group('id').lower()
-            if format_id in ('gif', 'jpeg'):
+            if format_id == 'gif':
                 continue
             download_url = m.group('url')
             if download_url in download_urls:

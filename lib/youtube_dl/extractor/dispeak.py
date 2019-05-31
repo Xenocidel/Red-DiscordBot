@@ -58,17 +58,10 @@ class DigitallySpeakingIE(InfoExtractor):
             stream_name = xpath_text(a_format, 'streamName', fatal=True)
             video_path = re.match(r'mp4\:(?P<path>.*)', stream_name).group('path')
             url = video_root + video_path
-            bitrate = xpath_text(a_format, 'bitrate')
-            tbr = int_or_none(bitrate)
-            vbr = int_or_none(self._search_regex(
-                r'-(\d+)\.mp4', video_path, 'vbr', default=None))
-            abr = tbr - vbr if tbr and vbr else None
+            vbr = xpath_text(a_format, 'bitrate')
             video_formats.append({
-                'format_id': bitrate,
                 'url': url,
-                'tbr': tbr,
-                'vbr': vbr,
-                'abr': abr,
+                'vbr': int_or_none(vbr),
             })
         return video_formats
 

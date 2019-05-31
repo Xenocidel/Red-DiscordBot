@@ -19,7 +19,6 @@ class TF1IE(InfoExtractor):
             # Sometimes wat serves the whole file with the --test option
             'skip_download': True,
         },
-        'expected_warnings': ['HTTP Error 404'],
     }, {
         'url': 'http://www.tfou.fr/chuggington/videos/le-grand-mysterioso-chuggington-7085291-739.html',
         'info_dict': {

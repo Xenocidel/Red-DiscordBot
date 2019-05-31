@@ -4,14 +4,13 @@
 # This package file exports some convenience functions for
 # interacting with pycparser
 #
-# Eli Bendersky [https://eli.thegreenplace.net/]
+# Eli Bendersky [http://eli.thegreenplace.net]
 # License: BSD
 #-----------------------------------------------------------------
 __all__ = ['c_lexer', 'c_parser', 'c_ast']
-__version__ = '2.19'
+__version__ = '2.18'
 
-import io
-from subprocess import check_output
+from subprocess import Popen, PIPE
 from .c_parser import CParser
 
 
@@ -39,7 +38,11 @@ def preprocess_file(filename, cpp_path='cpp', cpp_args=''):
     try:
         # Note the use of universal_newlines to treat all newlines
         # as \n for Python's purpose
-        text = check_output(path_list, universal_newlines=True)
+        #
+        pipe = Popen(   path_list,
+                        stdout=PIPE,
+                        universal_newlines=True)
+        text = pipe.communicate()[0]
     except OSError as e:
         raise RuntimeError("Unable to invoke 'cpp'.  " +
             'Make sure its path was passed correctly\n' +
@@ -82,7 +85,7 @@ def parse_file(filename, use_cpp=False, cpp_path='cpp', cpp_args='',
     if use_cpp:
         text = preprocess_file(filename, cpp_path, cpp_args)
     else:
-        with io.open(filename) as f:
+        with open(filename, 'rU') as f:
             text = f.read()
 
     if parser is None:

@@ -4,6 +4,7 @@ import re
 
 from .common import InfoExtractor
 from ..compat import (
+    compat_HTTPError,
     compat_str,
     compat_urlparse,
 )
@@ -15,7 +16,7 @@ from ..utils import (
 
 
 class LyndaBaseIE(InfoExtractor):
-    _SIGNIN_URL = 'https://www.lynda.com/signin/lynda'
+    _SIGNIN_URL = 'https://www.lynda.com/signin'
     _PASSWORD_URL = 'https://www.lynda.com/signin/password'
     _USER_URL = 'https://www.lynda.com/signin/user'
     _ACCOUNT_CREDENTIALS_HINT = 'Use --username and --password options to provide lynda.com account credentials.'
@@ -43,15 +44,21 @@ class LyndaBaseIE(InfoExtractor):
         form_data = self._hidden_inputs(form_html)
         form_data.update(extra_form_data)
 
-        response = self._download_json(
-            action_url, None, note,
-            data=urlencode_postdata(form_data),
-            headers={
-                'Referer': referrer_url,
-                'X-Requested-With': 'XMLHttpRequest',
-            }, expected_status=(418, 500, ))
+        try:
+            response = self._download_json(
+                action_url, None, note,
+                data=urlencode_postdata(form_data),
+                headers={
+                    'Referer': referrer_url,
+                    'X-Requested-With': 'XMLHttpRequest',
+                })
+        except ExtractorError as e:
+            if isinstance(e.cause, compat_HTTPError) and e.cause.code == 500:
+                response = self._parse_json(e.cause.read().decode('utf-8'), None)
+                self._check_error(response, ('email', 'password'))
+            raise
 
-        self._check_error(response, ('email', 'password', 'ErrorMessage'))
+        self._check_error(response, 'ErrorMessage')
 
         return response, action_url
 
@@ -87,15 +94,7 @@ class LyndaBaseIE(InfoExtractor):
 class LyndaIE(LyndaBaseIE):
     IE_NAME = 'lynda'
     IE_DESC = 'lynda.com videos'
-    _VALID_URL = r'''(?x)
-                    https?://
-                        (?:www\.)?(?:lynda\.com|educourse\.ga)/
-                        (?:
-                            (?:[^/]+/){2,3}(?P<course_id>\d+)|
-                            player/embed
-                        )/
-                        (?P<id>\d+)
-                    '''
+    _VALID_URL = r'https?://(?:www\.)?(?:lynda\.com|educourse\.ga)/(?:[^/]+/[^/]+/(?P<course_id>\d+)|player/embed)/(?P<id>\d+)'
 
     _TIMECODE_REGEX = r'\[(?P<timecode>\d+:\d+:\d+[\.,]\d+)\]'
 
@@ -113,9 +112,6 @@ class LyndaIE(LyndaBaseIE):
         'only_matching': True,
     }, {
         'url': 'https://educourse.ga/Bootstrap-tutorials/Using-exercise-files/110885/114408-4.html',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.lynda.com/de/Graphic-Design-tutorials/Willkommen-Grundlagen-guten-Gestaltung/393570/393572-4.html',
         'only_matching': True,
     }]
 
@@ -248,9 +244,8 @@ class LyndaIE(LyndaBaseIE):
     def _get_subtitles(self, video_id):
         url = 'https://www.lynda.com/ajax/player?videoId=%s&type=transcript' % video_id
         subs = self._download_json(url, None, False)
-        fixed_subs = self._fix_subtitles(subs)
-        if fixed_subs:
-            return {'en': [{'ext': 'srt', 'data': fixed_subs}]}
+        if subs:
+            return {'en': [{'ext': 'srt', 'data': self._fix_subtitles(subs)}]}
         else:
             return {}
 
@@ -261,15 +256,7 @@ class LyndaCourseIE(LyndaBaseIE):
 
     # Course link equals to welcome/introduction video link of same course
     # We will recognize it as course link
-    _VALID_URL = r'https?://(?:www|m)\.(?:lynda\.com|educourse\.ga)/(?P<coursepath>(?:[^/]+/){2,3}(?P<courseid>\d+))-2\.html'
-
-    _TESTS = [{
-        'url': 'https://www.lynda.com/Graphic-Design-tutorials/Grundlagen-guten-Gestaltung/393570-2.html',
-        'only_matching': True,
-    }, {
-        'url': 'https://www.lynda.com/de/Graphic-Design-tutorials/Grundlagen-guten-Gestaltung/393570-2.html',
-        'only_matching': True,
-    }]
+    _VALID_URL = r'https?://(?:www|m)\.(?:lynda\.com|educourse\.ga)/(?P<coursepath>[^/]+/[^/]+/(?P<courseid>\d+))-\d\.html'
 
     def _real_extract(self, url):
         mobj = re.match(self._VALID_URL, url)

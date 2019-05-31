@@ -4,10 +4,7 @@ from __future__ import unicode_literals
 import re
 
 from .common import InfoExtractor
-from ..utils import (
-    int_or_none,
-    orderedSet,
-)
+from ..utils import int_or_none
 
 
 class WebOfStoriesIE(InfoExtractor):
@@ -136,10 +133,8 @@ class WebOfStoriesPlaylistIE(InfoExtractor):
         webpage = self._download_webpage(url, playlist_id)
 
         entries = [
-            self.url_result(
-                'http://www.webofstories.com/play/%s' % video_id,
-                'WebOfStories', video_id=video_id)
-            for video_id in orderedSet(re.findall(r'\bid=["\']td_(\d+)', webpage))
+            self.url_result('http://www.webofstories.com/play/%s' % video_number, 'WebOfStories')
+            for video_number in set(re.findall(r'href="/playAll/%s\?sId=(\d+)"' % playlist_id, webpage))
         ]
 
         title = self._search_regex(

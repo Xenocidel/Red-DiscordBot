@@ -15,7 +15,6 @@ from ..utils import (
     strip_jsonp,
     unescapeHTML,
     unified_strdate,
-    url_or_none,
 )
 
 
@@ -50,13 +49,13 @@ class ORFTVthekIE(InfoExtractor):
         'params': {
             'skip_download': True,  # rtsp downloads
         },
-        'skip': 'Blocked outside of Austria / Germany',
+        '_skip': 'Blocked outside of Austria / Germany',
     }, {
         'url': 'http://tvthek.orf.at/topic/Fluechtlingskrise/10463081/Heimat-Fremde-Heimat/13879132/Senioren-betreuen-Migrantenkinder/13879141',
-        'only_matching': True,
+        'skip_download': True,
     }, {
         'url': 'http://tvthek.orf.at/profile/Universum/35429',
-        'only_matching': True,
+        'skip_download': True,
     }]
 
     def _real_extract(self, url):
@@ -69,35 +68,26 @@ class ORFTVthekIE(InfoExtractor):
                 webpage, 'playlist', group='json'),
             playlist_id, transform_source=unescapeHTML)['playlist']['videos']
 
+        def quality_to_int(s):
+            m = re.search('([0-9]+)', s)
+            if m is None:
+                return -1
+            return int(m.group(1))
+
         entries = []
         for sd in data_jsb:
             video_id, title = sd.get('id'), sd.get('title')
             if not video_id or not title:
                 continue
             video_id = compat_str(video_id)
-            formats = []
-            for fd in sd['sources']:
-                src = url_or_none(fd.get('src'))
-                if not src:
-                    continue
-                format_id_list = []
-                for key in ('delivery', 'quality', 'quality_string'):
-                    value = fd.get(key)
-                    if value:
-                        format_id_list.append(value)
-                format_id = '-'.join(format_id_list)
-                if determine_ext(fd['src']) == 'm3u8':
-                    formats.extend(self._extract_m3u8_formats(
-                        fd['src'], video_id, 'mp4', m3u8_id=format_id))
-                elif determine_ext(fd['src']) == 'f4m':
-                    formats.extend(self._extract_f4m_formats(
-                        fd['src'], video_id, f4m_id=format_id))
-                else:
-                    formats.append({
-                        'format_id': format_id,
-                        'url': src,
-                        'protocol': fd.get('protocol'),
-                    })
+            formats = [{
+                'preference': -10 if fd['delivery'] == 'hls' else None,
+                'format_id': '%s-%s-%s' % (
+                    fd['delivery'], fd['quality'], fd['quality_string']),
+                'url': fd['src'],
+                'protocol': fd['protocol'],
+                'quality': quality_to_int(fd['quality']),
+            } for fd in sd['sources']]
 
             # Check for geoblocking.
             # There is a property is_geoprotection, but that's always false
@@ -176,8 +166,7 @@ class ORFRadioIE(InfoExtractor):
                 'description': subtitle,
                 'duration': (info['end'] - info['start']) / 1000,
                 'timestamp': info['start'] / 1000,
-                'ext': 'mp3',
-                'series': data.get('programTitle')
+                'ext': 'mp3'
             }
 
         entries = [extract_entry_dict(t, data['title'], data['subtitle']) for t in data['streams']]
