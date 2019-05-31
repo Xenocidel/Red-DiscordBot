@@ -133,7 +133,6 @@ class Rosterize:
             ans['a_list'] = attendees  # list of attendees' IDs        
         else:
             # return all rosters in a specified server and the attendee counts
-            # TODO fix this
             queryelements = ["SELECT rname FROM rosters WHERE rosters.sid = '",
                 sid, "'"]
             query = "".join(queryelements)
@@ -229,7 +228,7 @@ class Rosterize:
 
     @commands.command(aliases=["dr"], pass_context=True, no_pm=True)
     async def delroster(self, ctx):
-        """Deletes an existing roster. Only the roster author can delete(TODO)
+        """Deletes an existing roster. Only the roster author can delete.
 
         Usage:
         delroster <roster name>
@@ -267,7 +266,7 @@ class Rosterize:
             em = discord.Embed()
             title_elements = ["There are ", str(r['r_count']), " rosters"]
             em.title = "".join(title_elements)
-            em.set_footer(text = "Rosterize by Xenocidel b20171015")
+            em.set_footer(text = "Rosterize by Xenocidel")
             desc_elements = []
             for rname, a_count in r['r_list'].items():
                 desc_elements.append("(")
